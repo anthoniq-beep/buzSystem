@@ -28,7 +28,7 @@ const CustomerList = () => {
     setLoading(true);
     try {
       const [customerRes, channelRes, userRes] = await Promise.all([
-        api.get('/customer'),
+        api.get('/customers'),
         api.get('/channel'),
         api.get('/users/assignable')
       ]);

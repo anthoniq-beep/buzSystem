@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import authRoutes from './routes/auth';
 import customerRoutes from './routes/customers';
+import commonRoutes from './routes/common';
 
 // Load environment variables
 dotenv.config();
@@ -29,6 +30,7 @@ app.use((req, res, next) => {
 // Routes
 app.use('/auth', authRoutes);
 app.use('/customers', customerRoutes);
+app.use('/', commonRoutes); // Handle /channel, /users, etc. at root for now
 
 // Basic Route
 app.get('/', (req, res) => {
