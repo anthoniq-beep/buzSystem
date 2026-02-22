@@ -6,6 +6,9 @@ import { PrismaClient } from '@prisma/client';
 const router = express.Router();
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+if (!process.env.JWT_SECRET) {
+    console.warn('Warning: JWT_SECRET not set in environment variables, using default key.');
+}
 
 // Login
 router.post('/login', async (req, res) => {
@@ -64,6 +67,10 @@ router.get('/me', async (req, res) => {
   }
 
   const token = authHeader.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ message: 'Invalid token format' });
+  }
+
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
     const user = await prisma.user.findUnique({

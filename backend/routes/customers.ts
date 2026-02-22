@@ -58,8 +58,7 @@ router.get('/:id', authenticate, async (req, res) => {
                 username: true
             }
         },
-        communications: true,
-        contracts: true
+        saleLogs: true
       }
     });
 
