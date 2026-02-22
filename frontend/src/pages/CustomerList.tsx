@@ -48,7 +48,7 @@ const CustomerList = () => {
 
   const handleCreate = async (values: any) => {
     try {
-      await api.post('/customer', values);
+      await api.post('/customers', values);
       message.success('线索创建成功');
       setIsModalOpen(false);
       form.resetFields();
@@ -76,7 +76,7 @@ const CustomerList = () => {
   const handleSubmitLog = async (values: any) => {
       if (!selectedCustomer) return;
       try {
-          await api.post(`/customer/${selectedCustomer.id}/log`, {
+          await api.post(`/customers/${selectedCustomer.id}/log`, {
               stage: values.stage,
               note: values.note,
               contractAmount: values.contractAmount,

@@ -5,12 +5,12 @@ import { PrismaClient } from '@prisma/client';
 import authRoutes from './routes/auth';
 import customerRoutes from './routes/customers';
 import commonRoutes from './routes/common';
+import prisma from './lib/prisma'; // Use singleton
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
-const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
@@ -32,10 +32,27 @@ app.use('/auth', authRoutes);
 app.use('/customers', customerRoutes);
 app.use('/', commonRoutes); // Handle /channel, /users, etc. at root for now
 
-// Basic Route
-app.get('/', (req, res) => {
-  res.send('BuzSystem API is running');
+// Error Handling
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error('Global error handler:', err);
+    res.status(500).json({ message: 'Internal server error', error: err.message });
 });
+
+// Start Server with Database Connection Check
+const startServer = async () => {
+    try {
+        await prisma.$connect();
+        console.log('Connected to database successfully.');
+        app.listen(PORT, () => {
+            console.log(`Server is running on port ${PORT}`);
+        });
+    } catch (error) {
+        console.error('Failed to connect to database:', error);
+        process.exit(1);
+    }
+};
+
+startServer();
 
 // Health Check
 app.get('/health', async (req, res) => {

@@ -22,7 +22,7 @@ const CustomerDetail = () => {
   const fetchCustomer = async () => {
     setLoading(true);
     try {
-      const response = await api.get(`/customer/${id}`);
+      const response = await api.get(`/customers/${id}`);
       setCustomer(response.data);
     } catch (error) {
       message.error('获取详情失败');
@@ -42,7 +42,7 @@ const CustomerDetail = () => {
 
   const handleSubmitLog = async (values: any) => {
     try {
-      await api.post(`/customer/${id}/log`, {
+      await api.post(`/customers/${id}/log`, {
         stage: actionStage,
         note: values.note,
         isEffective: true, // Default true for now
@@ -82,8 +82,8 @@ const CustomerDetail = () => {
     color: getTimelineColor(log.stage),
     dot: getTimelineIcon(log.stage),
     children: (
-        <Card size="small" variant="borderless" style={{ background: '#f9f9f9', marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Card size="small" bordered={false} style={{ background: '#f9f9f9', marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <Text strong>{log.stage}</Text>
                 <Text type="secondary" style={{ fontSize: 12 }}>
                     {dayjs(log.occurredAt).format('YYYY-MM-DD HH:mm')}

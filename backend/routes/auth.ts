@@ -1,10 +1,10 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma'; // Use singleton
 
 const router = express.Router();
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient(); // Removed
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 if (!process.env.JWT_SECRET) {
     console.warn('Warning: JWT_SECRET not set in environment variables, using default key.');
