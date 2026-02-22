@@ -7,7 +7,7 @@
 
     // Environment Settings
     // See also https://aka.ms/tsconfig/module
-    "module": "nodenext",
+    "module": "commonjs",
     "target": "esnext",
     "types": [],
     // For nodejs:
@@ -16,7 +16,7 @@
     // and npm install -D @types/node
 
     // Other Outputs
-    "sourceMap": true,
+    "esModuleInterop": true,
     "declaration": true,
     "declarationMap": true,
 
@@ -35,10 +35,11 @@
     // Recommended Options
     "strict": true,
     "jsx": "react-jsx",
-    "verbatimModuleSyntax": true,
+    // "verbatimModuleSyntax": false,
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
-    "moduleDetection": "force",
+    "moduleResolution": "node",
+    "verbatimModuleSyntax": false,
     "skipLibCheck": true,
   }
 }

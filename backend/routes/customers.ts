@@ -28,7 +28,7 @@ router.get('/', authenticate, async (req, res) => {
   try {
     const customers = await prisma.customer.findMany({
         include: {
-            assignedTo: {
+            owner: {
                 select: {
                     id: true,
                     name: true,
@@ -51,7 +51,7 @@ router.get('/:id', authenticate, async (req, res) => {
     const customer = await prisma.customer.findUnique({
       where: { id: parseInt(id) },
       include: {
-        assignedTo: {
+        owner: {
             select: {
                 id: true,
                 name: true,
