@@ -196,7 +196,7 @@ const CustomerList = () => {
                       {dayjs(lastLog.occurredAt).format('MM-DD HH:mm')}
                   </Space>
                   <Space>
-                      <Tag variant="filled">{lastLog.stage}</Tag>
+                      <Tag color="blue">{lastLog.stage}</Tag>
                       {lastLog.note && (
                           <Popover content={lastLog.note} title="跟进记录" trigger="hover">
                               <MessageOutlined style={{ color: '#1677ff', cursor: 'pointer' }} />
@@ -223,9 +223,9 @@ const CustomerList = () => {
         </Button>
       </div>
       
-      <Card variant="borderless" styles={{ body: { padding: 0 } }}>
+      <Card styles={{ body: { padding: 0 } }}>
         <Table 
-            columns={columns} 
+            columns={columns}  
             dataSource={customers} 
             rowKey="id" 
             loading={loading}
