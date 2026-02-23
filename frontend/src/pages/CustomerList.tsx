@@ -27,18 +27,24 @@ const CustomerList = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [customerRes, channelRes, userRes] = await Promise.all([
-        api.get('/customers'),
-        api.get('/channel'),
-        api.get('/users/assignable')
-      ]);
-      setCustomers(customerRes.data);
-      console.log('Channels:', channelRes.data); // Debug
-      console.log('Users:', userRes.data); // Debug
-      setChannels(channelRes.data);
-      setUsers(userRes.data);
+      // Fetch data independently to avoid Promise.all failure blocking everything
+      try {
+        const customerRes = await api.get('/customers');
+        setCustomers(customerRes.data);
+      } catch (e) { console.error('Failed to fetch customers', e); }
+
+      try {
+        const channelRes = await api.get('/channel');
+        setChannels(channelRes.data);
+      } catch (e) { console.error('Failed to fetch channels', e); }
+
+      try {
+        const userRes = await api.get('/users/assignable');
+        setUsers(userRes.data);
+      } catch (e) { console.error('Failed to fetch users', e); }
+
     } catch (error) {
-      message.error('获取数据失败');
+      message.error('获取部分数据失败，请检查网络');
     } finally {
       setLoading(false);
     }
