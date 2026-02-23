@@ -102,10 +102,7 @@ const CustomerList = () => {
   };
 
   const renderProcess = (customer: Customer) => {
-      // Only owner can operate? Or maybe managers too? For now, stick to owner.
-      const isOwner = customer.ownerId === user?.id;
-      if (!isOwner) return <span style={{ color: '#ccc' }}>仅负责人可见</span>;
-
+      // Allow viewing process for all accessible customers (filtered by backend)
       const logs = customer.saleLogs || [];
       const hasChance = logs.some(l => l.stage === SaleStage.CHANCE);
       const hasCall = logs.some(l => l.stage === SaleStage.CALL);
