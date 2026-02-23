@@ -3,12 +3,45 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma'; // Use singleton
 
+import { authenticate } from '../lib/middleware';
+
 const router = express.Router();
 // const prisma = new PrismaClient(); // Removed
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 if (!process.env.JWT_SECRET) {
     console.warn('Warning: JWT_SECRET not set in environment variables, using default key.');
 }
+
+// Change Password
+router.post('/change-password', authenticate, async (req: any, res) => {
+    const { oldPassword, newPassword } = req.body;
+    const userId = req.user.userId;
+    
+    try {
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) return res.status(404).json({ message: 'User not found' });
+        
+        // Verify old password
+        let isValid = false;
+        if (user.password === oldPassword) isValid = true;
+        else isValid = await bcrypt.compare(oldPassword, user.password);
+        
+        if (!isValid) return res.status(400).json({ message: 'Incorrect old password' });
+        
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        
+        await prisma.user.update({
+            where: { id: userId },
+            data: { password: hashedPassword }
+        });
+        
+        res.json({ message: 'Password updated successfully' });
+    } catch (error) {
+        console.error('Change password error:', error);
+        res.status(500).json({ message: 'Failed to update password' });
+    }
+});
 
 // Login
 router.post('/login', async (req, res) => {

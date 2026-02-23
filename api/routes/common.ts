@@ -104,6 +104,77 @@ router.get('/stats/team', authenticate, async (req: any, res) => {
     }
 });
 
+// Admin Dashboard Stats (Last 12 Months)
+router.get('/stats/admin', authenticate, async (req: any, res) => {
+    try {
+        const { role, departmentId } = req.user;
+        if (role !== 'ADMIN' && role !== 'MANAGER') {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+
+        const now = dayjs();
+        const start = now.subtract(11, 'month').startOf('month');
+        const end = now.endOf('month');
+
+        // Prepare Scope Filter
+        let userIds: number[] | undefined;
+        if (role === 'MANAGER') {
+            if (!departmentId) return res.json([]); // No dept -> no data
+            const deptUsers = await prisma.user.findMany({
+                where: { departmentId },
+                select: { id: true }
+            });
+            userIds = deptUsers.map(u => u.id);
+        }
+
+        // 1. Actual Sales (SaleLog DEAL)
+        const logWhere: any = {
+            stage: 'DEAL',
+            occurredAt: { gte: start.toDate(), lte: end.toDate() }
+        };
+        if (userIds) logWhere.actorId = { in: userIds };
+
+        const logs = await prisma.saleLog.findMany({
+            where: logWhere,
+            select: { occurredAt: true, dealAmount: true }
+        });
+
+        // 2. Sales Targets
+        const targetWhere: any = {
+            month: { gte: start.format('YYYY-MM'), lte: end.format('YYYY-MM') }
+        };
+        if (userIds) targetWhere.userId = { in: userIds };
+
+        const targets = await prisma.salesTarget.findMany({
+            where: targetWhere
+        });
+
+        // 3. Aggregate
+        const stats: Record<string, { month: string, target: number, actual: number }> = {};
+        
+        // Init months
+        for (let i = 0; i < 12; i++) {
+            const m = start.add(i, 'month').format('YYYY-MM');
+            stats[m] = { month: m, target: 0, actual: 0 };
+        }
+        
+        logs.forEach(log => {
+            const m = dayjs(log.occurredAt).format('YYYY-MM');
+            if (stats[m]) stats[m].actual += Number(log.dealAmount || 0);
+        });
+        
+        targets.forEach(t => {
+            const m = t.month;
+            if (stats[m]) stats[m].target += Number(t.amount || 0);
+        });
+        
+        res.json(Object.values(stats));
+    } catch (error) {
+        console.error('Error fetching admin stats:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 
 // === CHANNEL ROUTES ===
 
@@ -133,8 +204,8 @@ router.post('/channel', authenticate, async (req, res) => {
         const channel = await prisma.channel.create({
             data: {
                 name,
-                type,
-                category: category || 'COMPANY', // Default
+                type: type || 'OTHER', // Default to OTHER if not provided
+                category: category || 'COMPANY',
                 points: Number(points) || 0,
                 cost: Number(cost) || 0,
                 status: isActive === false ? 'INACTIVE' : 'ACTIVE'

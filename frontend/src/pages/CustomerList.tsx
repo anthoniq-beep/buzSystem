@@ -103,6 +103,10 @@ const CustomerList = () => {
 
   const renderProcess = (customer: Customer) => {
       // Allow viewing process for all accessible customers (filtered by backend)
+      // But only Owner can operate (or Admin if needed, but user said "no need to modify")
+      const isOwner = customer.ownerId === user?.id;
+      const canEdit = isOwner;
+
       const logs = customer.saleLogs || [];
       const hasChance = logs.some(l => l.stage === SaleStage.CHANCE);
       const hasCall = logs.some(l => l.stage === SaleStage.CALL);
@@ -117,6 +121,7 @@ const CustomerList = () => {
                       shape="circle" 
                       icon={<UserAddOutlined />} 
                       size="small"
+                      disabled={!canEdit}
                       onClick={() => handleStageClick(customer, SaleStage.CHANCE)}
                   />
               </Tooltip>
@@ -126,6 +131,7 @@ const CustomerList = () => {
                       shape="circle" 
                       icon={<PhoneOutlined />} 
                       size="small"
+                      disabled={!canEdit}
                       onClick={() => handleStageClick(customer, SaleStage.CALL)}
                   />
               </Tooltip>
@@ -135,6 +141,7 @@ const CustomerList = () => {
                       shape="circle" 
                       icon={<TeamOutlined />} 
                       size="small"
+                      disabled={!canEdit}
                       onClick={() => handleStageClick(customer, SaleStage.TOUCH)}
                   />
               </Tooltip>
@@ -145,6 +152,7 @@ const CustomerList = () => {
                       icon={<FileDoneOutlined />} 
                       size="small"
                       style={hasDeal ? { backgroundColor: '#52c41a', borderColor: '#52c41a' } : {}}
+                      disabled={!canEdit}
                       onClick={() => handleStageClick(customer, SaleStage.DEAL)}
                   />
               </Tooltip>
