@@ -168,6 +168,7 @@ model SaleLog {
   
   stage       SaleStage
   note        String?
+  dealAmount  Decimal?  @db.Decimal(12, 2) // 成交金额 (仅DEAL阶段)
   isEffective Boolean   @default(true)
   occurredAt  DateTime  @default(now())
 
