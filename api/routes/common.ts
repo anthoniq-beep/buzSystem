@@ -27,64 +27,75 @@ router.get('/stats/team', authenticate, async (req: any, res) => {
             select: { id: true, name: true, role: true }
         });
 
-        // 2. Aggregate Data for each user
-        const stats = await Promise.all(users.map(async (user) => {
-            // Count Customers created in this month (Leads)
-            const leadCount = await prisma.customer.count({
-                where: {
-                    ownerId: user.id,
-                    createdAt: { gte: startOfMonth, lte: endOfMonth }
-                }
-            });
+        // 2. Aggregate Data (Optimized with groupBy)
+        const userIds = users.map(u => u.id);
 
-            // Count Deals in this month (from SaleLog or Customer status change?)
-            // Let's use SaleLog for accuracy of *when* it happened
-            const dealLogs = await prisma.saleLog.findMany({
-                where: {
-                    actorId: user.id, // Or customer.ownerId? Usually actorId is the sales rep
-                    stage: 'DEAL',
-                    occurredAt: { gte: startOfMonth, lte: endOfMonth }
-                },
-                select: { dealAmount: true } // We added this field
-            });
+        // Lead Counts (Customer created)
+        const leadCounts = await prisma.customer.groupBy({
+            by: ['ownerId'],
+            where: {
+                ownerId: { in: userIds },
+                createdAt: { gte: startOfMonth, lte: endOfMonth }
+            },
+            _count: { id: true }
+        });
+        const leadMap = new Map(leadCounts.map(item => [item.ownerId, item._count.id]));
+
+        // Log Stats (Chance, Call, Touch, Deal)
+        const logStats = await prisma.saleLog.groupBy({
+            by: ['actorId', 'stage'],
+            where: {
+                actorId: { in: userIds },
+                occurredAt: { gte: startOfMonth, lte: endOfMonth }
+            },
+            _count: { id: true },
+            _sum: { dealAmount: true }
+        });
+
+        const statsMap = new Map();
+        logStats.forEach(item => {
+            const uid = item.actorId;
+            if (!statsMap.has(uid)) statsMap.set(uid, { chance: 0, call: 0, touch: 0, deal: 0, amount: 0 });
+            const entry = statsMap.get(uid);
             
-            const dealCount = dealLogs.length;
-            const contractAmount = dealLogs.reduce((sum, log) => sum + Number(log.dealAmount || 0), 0);
+            if (item.stage === 'CHANCE') entry.chance = item._count.id;
+            if (item.stage === 'CALL') entry.call = item._count.id;
+            if (item.stage === 'TOUCH') entry.touch = item._count.id;
+            if (item.stage === 'DEAL') {
+                entry.deal = item._count.id;
+                entry.amount = Number(item._sum.dealAmount || 0);
+            }
+        });
 
-            // Other stages counts
-            const chanceCount = await prisma.saleLog.count({
-                where: { actorId: user.id, stage: 'CHANCE', occurredAt: { gte: startOfMonth, lte: endOfMonth } }
-            });
-            const callCount = await prisma.saleLog.count({
-                where: { actorId: user.id, stage: 'CALL', occurredAt: { gte: startOfMonth, lte: endOfMonth } }
-            });
-            const touchCount = await prisma.saleLog.count({
-                where: { actorId: user.id, stage: 'TOUCH', occurredAt: { gte: startOfMonth, lte: endOfMonth } }
-            });
+        // Sales Targets
+        const targets = await prisma.salesTarget.findMany({
+            where: {
+                userId: { in: userIds },
+                month: month as string
+            }
+        });
+        const targetMap = new Map(targets.map(t => [t.userId, Number(t.amount)]));
 
-            // Get Sales Target
-            const target = await prisma.salesTarget.findFirst({
-                where: {
-                    userId: user.id,
-                    month: month as string
-                }
-            });
-            const targetAmount = target ? Number(target.amount) : 0;
-
+        // Assemble
+        const stats = users.map(user => {
+            const s = statsMap.get(user.id) || { chance: 0, call: 0, touch: 0, deal: 0, amount: 0 };
+            const leadCount = leadMap.get(user.id) || 0;
+            const targetAmount = targetMap.get(user.id) || 0;
+            
             return {
                 id: user.id,
                 name: user.name,
                 role: user.role,
                 leadCount,
-                chanceCount,
-                callCount,
-                touchCount,
-                dealCount,
-                contractAmount,
+                chanceCount: s.chance,
+                callCount: s.call,
+                touchCount: s.touch,
+                dealCount: s.deal,
+                contractAmount: s.amount,
                 targetAmount,
-                completionRate: targetAmount ? (contractAmount / targetAmount) * 100 : 0
+                completionRate: targetAmount ? (s.amount / targetAmount) * 100 : 0
             };
-        }));
+        });
 
         res.json(stats);
     } catch (error) {
