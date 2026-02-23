@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { ProTable } from '@ant-design/pro-components';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Button, App, Modal, Form, Input, InputNumber, Select, Tag, Popconfirm } from 'antd';
+import { Button, App, Modal, Form, Input, InputNumber, Select, Tag, Popconfirm, Switch } from 'antd';
 import api from '../../services/api';
 
 type ChannelItem = {
@@ -98,11 +98,19 @@ const ChannelPage = () => {
         true: { text: '启用', status: 'Success' },
         false: { text: '禁用', status: 'Error' },
       },
-      hideInForm: true, // Assuming default active on create
       render: (_, record) => (
-        <Tag color={record.isActive ? 'green' : 'red'}>
-          {record.isActive ? '启用' : '禁用'}
-        </Tag>
+        <Switch 
+            checked={record.isActive} 
+            checkedChildren="启用" 
+            unCheckedChildren="禁用"
+            onChange={async (checked) => {
+                try {
+                    await api.patch(`/channel/${record.id}`, { isActive: checked });
+                    message.success('状态更新成功');
+                    actionRef.current?.reload();
+                } catch(e) { message.error('更新失败'); }
+            }} 
+        />
       ),
     },
     {
@@ -191,6 +199,9 @@ const ChannelPage = () => {
           </Form.Item>
           <Form.Item name="cost" label="渠道费用">
             <InputNumber style={{ width: '100%' }} prefix="¥" precision={2} />
+          </Form.Item>
+          <Form.Item name="isActive" label="状态" valuePropName="checked" initialValue={true}>
+            <Switch checkedChildren="启用" unCheckedChildren="禁用" />
           </Form.Item>
         </Form>
       </Modal>
