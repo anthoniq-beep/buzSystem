@@ -65,10 +65,25 @@ const Login = () => {
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f0f2f5' }}>
-      <Card style={{ width: 400, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+    <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh', 
+        backgroundImage: 'url(/2.png)', 
+        backgroundSize: 'cover', 
+        backgroundPosition: 'center' 
+    }}>
+      <Card style={{ 
+          width: 400, 
+          boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)', 
+          background: 'rgba(255, 255, 255, 0.65)', 
+          backdropFilter: 'blur(8px)', 
+          border: '1px solid rgba(255, 255, 255, 0.18)', 
+          borderRadius: '16px' 
+      }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <Title level={3} style={{ color: '#1677ff' }}>CRM 系统登录</Title>
+          <Title level={3} style={{ color: '#1677ff' }}>蜂之翼业务系统</Title>
         </div>
         <Form
           name="login"
@@ -80,14 +95,14 @@ const Login = () => {
             name="username"
             rules={[{ required: true, message: '请输入用户名!' }]}
           >
-            <Input prefix={<UserOutlined />} placeholder="用户名 (admin / manager1 / sales1)" />
+            <Input prefix={<UserOutlined />} placeholder="用户名" />
           </Form.Item>
 
           <Form.Item
             name="password"
             rules={[{ required: true, message: '请输入密码!' }]}
           >
-            <Input.Password prefix={<LockOutlined />} placeholder="密码 (password123)" />
+            <Input.Password prefix={<LockOutlined />} placeholder="密码" />
           </Form.Item>
 
           <Form.Item>
@@ -95,10 +110,6 @@ const Login = () => {
               登录
             </Button>
           </Form.Item>
-          
-          <div style={{ textAlign: 'center', color: '#888' }}>
-             测试账号: admin / manager1 / sales1 <br/> 密码: password123
-          </div>
         </Form>
       </Card>
     </div>
