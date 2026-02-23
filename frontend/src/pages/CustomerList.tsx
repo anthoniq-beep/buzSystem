@@ -33,6 +33,8 @@ const CustomerList = () => {
         api.get('/users/assignable')
       ]);
       setCustomers(customerRes.data);
+      console.log('Channels:', channelRes.data); // Debug
+      console.log('Users:', userRes.data); // Debug
       setChannels(channelRes.data);
       setUsers(userRes.data);
     } catch (error) {
@@ -245,8 +247,8 @@ const CustomerList = () => {
           </Form.Item>
           <Form.Item name="sourceId" label="渠道来源" rules={[{ required: true }]}>
              <Select>
-                 {channels.filter(c => c.isActive).map(c => (
-                     <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
+                 {channels.map(c => (
+                     <Select.Option key={c.id} value={c.id}>{c.name} {c.isActive ? '' : '(禁用)'}</Select.Option>
                  ))}
              </Select>
           </Form.Item>
