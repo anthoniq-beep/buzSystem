@@ -18,17 +18,29 @@ export const getAccessibleUserIds = async (currentUser: any) => {
     }
     
     if (role === 'SUPERVISOR') {
-        // Get self and direct subordinates
-        const users = await prisma.user.findMany({
-            where: { 
-                OR: [
-                    { id: userId },
-                    { supervisorId: userId }
-                ]
-            },
-            select: { id: true }
-        });
-        return users.map(u => u.id);
+        // Get self and ALL subordinates recursively
+        let accessibleIds = [userId];
+        let currentLevel = [userId];
+        
+        // Loop to find subordinates (breadth-first search)
+        // Max depth safety check: 10 levels
+        let depth = 0;
+        while (currentLevel.length > 0 && depth < 10) {
+            const subordinates = await prisma.user.findMany({
+                where: { supervisorId: { in: currentLevel } },
+                select: { id: true }
+            });
+            
+            // Filter out already processed IDs to prevent cycles
+            const nextLevel = subordinates.map(u => u.id).filter(id => !accessibleIds.includes(id));
+            
+            if (nextLevel.length === 0) break;
+            
+            accessibleIds = [...accessibleIds, ...nextLevel];
+            currentLevel = nextLevel;
+            depth++;
+        }
+        return accessibleIds;
     }
     
     // EMPLOYEE: Only self
