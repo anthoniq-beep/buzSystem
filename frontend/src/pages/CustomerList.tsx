@@ -173,8 +173,8 @@ const CustomerList = () => {
     },
     {
       title: '渠道来源',
-      dataIndex: ['source', 'name'],
-      key: 'source',
+      dataIndex: ['channel', 'name'],
+      key: 'channel',
       width: 100,
     },
     {
