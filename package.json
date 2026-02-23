@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "cd frontend && npm install && npm run build",
-    "vercel-build": "cd frontend && npm install && npm run build"
+    "build": "cd frontend && npm run build",
+    "vercel-build": "cd frontend && npm run build",
+    "postinstall": "cd api && npx prisma generate"
   },
   "workspaces": [
     "frontend",
