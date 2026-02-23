@@ -21,6 +21,16 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Debug Route
+app.get('/api/debug', (req, res) => {
+    res.json({
+        message: 'API is working',
+        url: req.url,
+        env: process.env.NODE_ENV,
+        db_url_exists: !!process.env.DATABASE_URL
+    });
+});
+
 // Logging Middleware
 app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
