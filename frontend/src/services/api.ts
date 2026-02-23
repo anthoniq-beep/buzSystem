@@ -1,7 +1,9 @@
 import axios from 'axios';
 
-// Get API base URL from environment variable or fallback to localhost
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// Get API base URL
+// In production (Vercel), we use relative path '/api' because frontend and backend are on the same domain
+// In development, we use VITE_API_URL or localhost
+const baseURL = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_URL || 'http://localhost:3000');
 
 console.log('API Base URL:', baseURL); // Debug log
 
