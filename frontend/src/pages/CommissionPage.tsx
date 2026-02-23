@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Card, Table, Tag, App, DatePicker, Select, Space, Button, Modal, Form, Input, InputNumber } from 'antd';
+import { Card, Table, Tag, App, DatePicker, Select, Space, Button, Modal, Form, Input, InputNumber, Tooltip } from 'antd';
 import { EditOutlined, CheckOutlined } from '@ant-design/icons';
 import api from '../services/api';
 import dayjs from 'dayjs';
@@ -77,9 +77,11 @@ const CommissionPage = () => {
               status: c.status
           };
 
-          if (group.details[c.type]) {
-              group.details[c.type].push(detail);
+          // Safety check for unknown types
+          if (!group.details[c.type]) {
+              group.details[c.type] = [];
           }
+          group.details[c.type].push(detail);
       });
 
       setData(Object.values(grouped));
@@ -112,19 +114,18 @@ const CommissionPage = () => {
               {details.map((d: any) => (
                   <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
                       <span style={{ marginRight: 8 }}>{d.userName}:</span>
-                      <Tooltip title={isAdminOrManager ? "点击修改" : ""}>
-                          <span 
-                              style={{ 
-                                  fontWeight: 'bold', 
-                                  cursor: isAdminOrManager ? 'pointer' : 'default',
-                                  color: isAdminOrManager ? '#1677ff' : 'inherit',
-                                  textDecoration: isAdminOrManager ? 'underline' : 'none'
-                              }}
-                              onClick={() => handleEdit(d)}
-                          >
-                              ¥{d.amount}
-                          </span>
-                      </Tooltip>
+                      <span 
+                          title={isAdminOrManager ? "点击修改" : ""}
+                          style={{ 
+                              fontWeight: 'bold', 
+                              cursor: isAdminOrManager ? 'pointer' : 'default',
+                              color: isAdminOrManager ? '#1677ff' : 'inherit',
+                              textDecoration: isAdminOrManager ? 'underline' : 'none'
+                          }}
+                          onClick={() => handleEdit(d)}
+                      >
+                          ¥{d.amount}
+                      </span>
                   </div>
               ))}
           </div>
