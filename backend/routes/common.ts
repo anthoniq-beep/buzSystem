@@ -87,8 +87,8 @@ router.get('/users/assignable', async (req, res) => {
     try {
         const users = await prisma.user.findMany({
             where: {
-                role: { in: ['MANAGER', 'EMPLOYEE', 'SUPERVISOR'] },
-                status: 'REGULAR'
+                role: { in: ['MANAGER', 'EMPLOYEE', 'SUPERVISOR', 'ADMIN'] }, // Include ADMIN for testing
+                // status: 'REGULAR' // Removed status check for now to allow testing
             },
             select: {
                 id: true,
