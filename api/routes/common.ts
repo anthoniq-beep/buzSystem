@@ -97,7 +97,7 @@ router.get('/stats/team', authenticate, async (req: any, res) => {
 // === CHANNEL ROUTES ===
 
 // Get All Channels
-router.get('/channel', async (req, res) => {
+router.get('/channel', authenticate, async (req, res) => {
     try {
         const channels = await prisma.channel.findMany({
             orderBy: { createdAt: 'desc' }
@@ -173,13 +173,21 @@ router.delete('/channel/:id', async (req, res) => {
 // === USERS ROUTES ===
 
 // Get Assignable Users
-router.get('/users/assignable', async (req, res) => {
+router.get('/users/assignable', authenticate, async (req: any, res) => {
     try {
+        const accessibleIds = await getAccessibleUserIds(req.user);
+
+        const where: any = {
+            role: { in: ['MANAGER', 'EMPLOYEE', 'SUPERVISOR', 'ADMIN'] }, // Include ADMIN for testing
+            // status: 'REGULAR' // Removed status check for now to allow testing
+        };
+
+        if (accessibleIds) {
+            where.id = { in: accessibleIds };
+        }
+
         const users = await prisma.user.findMany({
-            where: {
-                role: { in: ['MANAGER', 'EMPLOYEE', 'SUPERVISOR', 'ADMIN'] }, // Include ADMIN for testing
-                // status: 'REGULAR' // Removed status check for now to allow testing
-            },
+            where,
             select: {
                 id: true,
                 name: true,
