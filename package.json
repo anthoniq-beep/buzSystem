@@ -10,5 +10,8 @@
   "workspaces": [
     "frontend",
     "api"
-  ]
+  ],
+  "engines": {
+    "node": "20.x"
+  }
 }
