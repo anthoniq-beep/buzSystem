@@ -116,13 +116,14 @@ router.get('/channel', authenticate, async (req, res) => {
 });
 
 // Create Channel
-router.post('/channel', async (req, res) => {
-    const { name, type, points, cost, isActive } = req.body;
+router.post('/channel', authenticate, async (req, res) => {
+    const { name, type, category, points, cost, isActive } = req.body;
     try {
         const channel = await prisma.channel.create({
             data: {
                 name,
                 type,
+                category: category || 'COMPANY', // Default
                 points: Number(points) || 0,
                 cost: Number(cost) || 0,
                 status: isActive === false ? 'INACTIVE' : 'ACTIVE'
@@ -136,13 +137,14 @@ router.post('/channel', async (req, res) => {
 });
 
 // Update Channel
-router.patch('/channel/:id', async (req, res) => {
+router.patch('/channel/:id', authenticate, async (req, res) => {
     const { id } = req.params;
-    const { name, type, points, cost, isActive } = req.body;
+    const { name, type, category, points, cost, isActive } = req.body;
     try {
         const updateData: any = {};
         if (name !== undefined) updateData.name = name;
         if (type !== undefined) updateData.type = type;
+        if (category !== undefined) updateData.category = category;
         if (points !== undefined) updateData.points = Number(points);
         if (cost !== undefined) updateData.cost = Number(cost);
         if (isActive !== undefined) updateData.status = isActive ? 'ACTIVE' : 'INACTIVE';

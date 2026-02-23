@@ -8,7 +8,7 @@ import api from '../../services/api';
 type ChannelItem = {
   id: number;
   name: string;
-  type: 'COMPANY' | 'INDIVIDUAL';
+  category: 'COMPANY' | 'PERSONAL';
   points: number;
   cost: number;
   isActive: boolean;
@@ -72,11 +72,11 @@ const ChannelPage = () => {
       },
     },
     {
-      title: '渠道类型',
-      dataIndex: 'type',
+      title: '渠道分类',
+      dataIndex: 'category',
       valueEnum: {
         COMPANY: { text: '公司渠道', status: 'Processing' },
-        INDIVIDUAL: { text: '个人渠道', status: 'Success' },
+        PERSONAL: { text: '个人渠道', status: 'Success' },
       },
     },
     {
@@ -188,10 +188,10 @@ const ChannelPage = () => {
           <Form.Item name="name" label="渠道名称" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="type" label="渠道类型" rules={[{ required: true }]}>
+          <Form.Item name="category" label="渠道分类" rules={[{ required: true }]}>
             <Select>
               <Select.Option value="COMPANY">公司渠道</Select.Option>
-              <Select.Option value="INDIVIDUAL">个人渠道</Select.Option>
+              <Select.Option value="PERSONAL">个人渠道</Select.Option>
             </Select>
           </Form.Item>
           <Form.Item name="points" label="渠道点数">

@@ -132,17 +132,94 @@ router.post('/:id/log', authenticate, async (req: any, res) => {
             data: updateData
         });
 
-        // 3. Create Commission if DEAL
+        // 3. COMMISSION LOGIC (Only on DEAL)
         if (stage === 'DEAL' && contractAmount) {
-            await prisma.commission.create({
-                data: {
-                    userId: req.user.userId,
-                    customerId: parseInt(id),
-                    amount: Number(contractAmount),
-                    commission: 0, // Pending calculation
-                    status: 'PENDING'
-                }
+            const amount = Number(contractAmount);
+            const customerId = parseInt(id);
+            
+            // Fetch customer with channel and history
+            const customer = await prisma.customer.findUnique({
+                where: { id: customerId },
+                include: { channel: true, saleLogs: { orderBy: { occurredAt: 'desc' } } }
             });
+            
+            if (customer) {
+                // Helper to create commission
+                const createComm = async (uid: number, rate: number, type: any) => {
+                    await prisma.commission.create({
+                        data: {
+                            userId: uid,
+                            customerId,
+                            amount,
+                            commission: amount * rate,
+                            status: 'PENDING',
+                            type
+                        }
+                    });
+                };
+
+                // 3.1 CHANCE Commission
+                const chanceLog = customer.saleLogs.find((l: any) => l.stage === 'CHANCE');
+                if (chanceLog) {
+                    const category = customer.channel?.category || 'COMPANY';
+                    
+                    if (category === 'COMPANY') {
+                        // User 1%
+                        await createComm(chanceLog.actorId, 0.01, 'CHANCE');
+                        // Dept 2% (Assign to Manager of Dept)
+                        const chanceActor = await prisma.user.findUnique({ where: { id: chanceLog.actorId } });
+                        if (chanceActor?.departmentId) {
+                            const manager = await prisma.user.findFirst({
+                                where: { departmentId: chanceActor.departmentId, role: 'MANAGER' }
+                            });
+                            if (manager) {
+                                await createComm(manager.id, 0.02, 'DEPT');
+                            }
+                        }
+                    } else {
+                        // Personal -> User 3%
+                        await createComm(chanceLog.actorId, 0.03, 'CHANCE');
+                    }
+                }
+
+                // 3.2 CALL Commission (2%)
+                const callLog = customer.saleLogs.find((l: any) => l.stage === 'CALL');
+                if (callLog) {
+                    await createComm(callLog.actorId, 0.02, 'CALL');
+                }
+
+                // 3.3 TOUCH Commission (2%)
+                const touchLog = customer.saleLogs.find((l: any) => l.stage === 'TOUCH');
+                if (touchLog) {
+                    await createComm(touchLog.actorId, 0.02, 'TOUCH');
+                }
+
+                // 3.4 DEAL Commission
+                const dealActor = await prisma.user.findUnique({ where: { id: req.user.userId } });
+                if (dealActor) {
+                    let userRate = 0.01;
+                    let deptRate = 0.02;
+
+                    if (dealActor.role === 'MANAGER') {
+                        userRate = 0.03;
+                        deptRate = 0;
+                    } else if (dealActor.role === 'SUPERVISOR') {
+                        userRate = 0.02;
+                        deptRate = 0.01;
+                    }
+                    
+                    await createComm(dealActor.id, userRate, 'DEAL');
+                    
+                    if (deptRate > 0 && dealActor.departmentId) {
+                        const manager = await prisma.user.findFirst({
+                            where: { departmentId: dealActor.departmentId, role: 'MANAGER' }
+                        });
+                        if (manager) {
+                            await createComm(manager.id, deptRate, 'DEPT');
+                        }
+                    }
+                }
+            }
         }
         
         res.json(log);

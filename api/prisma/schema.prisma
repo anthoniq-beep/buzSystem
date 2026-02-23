@@ -55,6 +55,11 @@ enum ChannelType {
   OTHER
 }
 
+enum ChannelCategory {
+  COMPANY
+  PERSONAL
+}
+
 enum ChannelStatus {
   ACTIVE
   INACTIVE
@@ -65,6 +70,14 @@ enum CommissionStatus {
   APPROVED
   PAID
   REJECTED
+}
+
+enum CommissionType {
+  CHANCE
+  CALL
+  TOUCH
+  DEAL
+  DEPT
 }
 
 // --------------------------------------------------------
@@ -125,6 +138,7 @@ model Channel {
   id        Int           @id @default(autoincrement())
   name      String
   type      ChannelType   @default(OTHER)
+  category  ChannelCategory @default(COMPANY) // Default to COMPANY
   points    Decimal?      @db.Decimal(5, 2) // 渠道点数
   cost      Decimal?      @db.Decimal(10, 2) // 渠道费用
   status    ChannelStatus @default(ACTIVE)
@@ -216,6 +230,7 @@ model Commission {
   commission    Decimal?         @db.Decimal(12, 2) // 佣金金额
   
   status        CommissionStatus @default(PENDING)
+  type          CommissionType   @default(DEAL)
   
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
