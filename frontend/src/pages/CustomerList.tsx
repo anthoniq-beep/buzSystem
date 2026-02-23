@@ -53,8 +53,10 @@ const CustomerList = () => {
       setIsModalOpen(false);
       form.resetFields();
       fetchData();
-    } catch (error) {
-      message.error('创建失败');
+    } catch (error: any) {
+      console.error('Create error:', error);
+      const errorMsg = error.response?.data?.message || '创建失败，请稍后重试';
+      message.error(errorMsg);
     }
   };
 

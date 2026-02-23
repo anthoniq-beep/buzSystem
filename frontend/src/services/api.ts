@@ -7,6 +7,7 @@ console.log('API Base URL:', baseURL); // Debug log
 
 const api = axios.create({
   baseURL,
+  timeout: 60000, // 60s timeout for Render cold starts
   headers: {
     'Content-Type': 'application/json',
   },

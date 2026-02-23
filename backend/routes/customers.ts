@@ -75,6 +75,8 @@ router.get('/:id', authenticate, async (req, res) => {
 // Create customer
 router.post('/', authenticate, async (req: any, res) => {
     const { name, phone, sourceId, ownerId, companyName } = req.body;
+    console.log(`User ${req.user?.userId} creating customer:`, req.body); // Debug log
+
     try {
         const customer = await prisma.customer.create({
             data: {
