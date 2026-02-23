@@ -19,6 +19,8 @@ const CustomerList = () => {
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [actionStage, setActionStage] = useState<SaleStage | null>(null);
+  const [isReadOnly, setIsReadOnly] = useState(false);
+  const [stageLogs, setStageLogs] = useState<any[]>([]);
   
   const navigate = useNavigate();
   const [form] = Form.useForm();
@@ -71,16 +73,23 @@ const CustomerList = () => {
   const handleStageClick = (customer: Customer, stage: SaleStage) => {
       // Check if trying to edit DEAL
       const hasDeal = customer.saleLogs?.some(l => l.stage === SaleStage.DEAL);
-      if (stage === SaleStage.DEAL && hasDeal) {
-          message.warning('该客户已签约，无法再次修改');
-          return;
-      }
+      
+      const isOwner = customer.ownerId === user?.id;
+      const canEdit = isOwner && !(stage === SaleStage.DEAL && hasDeal); // Lock edit if deal signed
 
       setSelectedCustomer(customer);
       setActionStage(stage);
-      logForm.resetFields();
-      logForm.setFieldsValue({ stage }); // Pre-fill stage
+      
+      const logs = customer.saleLogs?.filter(l => l.stage === stage) || [];
+      setStageLogs(logs);
+
+      setIsReadOnly(!canEdit);
       setIsLogModalOpen(true);
+      
+      if (canEdit) {
+          logForm.resetFields();
+          logForm.setFieldsValue({ stage });
+      }
   };
 
   const handleSubmitLog = async (values: any) => {
@@ -274,31 +283,47 @@ const CustomerList = () => {
       </Modal>
 
       <Modal 
-        title="添加跟进记录" 
+        title={isReadOnly ? `${actionStage} 记录` : "添加跟进记录"} 
         open={isLogModalOpen} 
         onCancel={() => setIsLogModalOpen(false)} 
-        onOk={() => logForm.submit()}
+        onOk={() => !isReadOnly && logForm.submit()}
+        footer={isReadOnly ? [<Button key="close" onClick={() => setIsLogModalOpen(false)}>关闭</Button>] : undefined}
       >
-          <Form form={logForm} layout="vertical" onFinish={handleSubmitLog}>
-              <Form.Item name="stage" label="跟进阶段" rules={[{ required: true }]}>
-                  <Select onChange={(val) => setActionStage(val)} disabled={true}> 
-                      <Select.Option value={SaleStage.CHANCE}>客资 (CHANCE)</Select.Option>
-                      <Select.Option value={SaleStage.CALL}>约访 (CALL)</Select.Option>
-                      <Select.Option value={SaleStage.TOUCH}>接待 (TOUCH)</Select.Option>
-                      <Select.Option value={SaleStage.DEAL}>签约 (DEAL)</Select.Option>
-                  </Select>
-              </Form.Item>
-              
-              {actionStage === SaleStage.DEAL && (
-                  <Form.Item name="contractAmount" label="合同金额" rules={[{ required: true }]}>
-                      <InputNumber style={{ width: '100%' }} prefix="¥" />
+          {isReadOnly ? (
+              <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  {stageLogs.length === 0 ? <p style={{ color: '#999' }}>暂无记录</p> : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                          {stageLogs.map(log => (
+                              <Card key={log.id} size="small" type="inner" title={dayjs(log.occurredAt).format('YYYY-MM-DD HH:mm')}>
+                                  <div style={{ whiteSpace: 'pre-wrap' }}>{log.note || '无备注'}</div>
+                                  {log.dealAmount && <div style={{ marginTop: 4, fontWeight: 'bold', color: '#52c41a' }}>金额: ¥{log.dealAmount}</div>}
+                              </Card>
+                          ))}
+                      </div>
+                  )}
+              </div>
+          ) : (
+              <Form form={logForm} layout="vertical" onFinish={handleSubmitLog}>
+                  <Form.Item name="stage" label="跟进阶段" rules={[{ required: true }]}>
+                      <Select onChange={(val) => setActionStage(val)} disabled={true}> 
+                          <Select.Option value={SaleStage.CHANCE}>客资 (CHANCE)</Select.Option>
+                          <Select.Option value={SaleStage.CALL}>约访 (CALL)</Select.Option>
+                          <Select.Option value={SaleStage.TOUCH}>接待 (TOUCH)</Select.Option>
+                          <Select.Option value={SaleStage.DEAL}>签约 (DEAL)</Select.Option>
+                      </Select>
                   </Form.Item>
-              )}
+                  
+                  {actionStage === SaleStage.DEAL && (
+                      <Form.Item name="contractAmount" label="合同金额" rules={[{ required: true }]}>
+                          <InputNumber style={{ width: '100%' }} prefix="¥" />
+                      </Form.Item>
+                  )}
 
-              <Form.Item name="note" label="跟进情况" rules={[{ required: true }]}>
-                  <Input.TextArea rows={4} placeholder="请输入详细的跟进情况..." />
-              </Form.Item>
-          </Form>
+                  <Form.Item name="note" label="跟进情况" rules={[{ required: true }]}>
+                      <Input.TextArea rows={4} placeholder="请输入详细的跟进情况..." />
+                  </Form.Item>
+              </Form>
+          )}
       </Modal>
     </div>
   );

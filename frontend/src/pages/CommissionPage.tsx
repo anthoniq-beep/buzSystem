@@ -7,11 +7,10 @@ import { useAuth } from '../context/AuthContext';
 import { Role } from '../types';
 
 const CommissionPage = () => {
-  const { message } = App.useApp();
   const { user } = useAuth();
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<any[]>([]); // Aggregated data
+  const [rawData, setRawData] = useState<any[]>([]); // Raw data from API
   const [loading, setLoading] = useState(false);
-  const [filteredData, setFilteredData] = useState<any[]>([]);
   const [selectedQuarter, setSelectedQuarter] = useState<dayjs.Dayjs | null>(dayjs());
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,14 +24,14 @@ const CommissionPage = () => {
   }, []);
 
   useEffect(() => {
-    filterData();
-  }, [data, selectedQuarter]);
+    processData();
+  }, [rawData, selectedQuarter]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const response = await api.get('/commission');
-      setData(response.data);
+      setRawData(response.data);
     } catch (error) {
       message.error('获取提成数据失败');
     } finally {
@@ -40,21 +39,57 @@ const CommissionPage = () => {
     }
   };
 
-  const filterData = () => {
-    // Basic date filtering based on createdAt (simplified)
-    if (!selectedQuarter) {
-      setFilteredData(data);
-      return;
-    }
-    setFilteredData(data.filter((item: any) => {
-        return dayjs(item.createdAt).isSame(selectedQuarter, 'quarter');
-    }));
+  const processData = () => {
+      // 1. Filter by Quarter
+      const filtered = selectedQuarter 
+          ? rawData.filter((item: any) => dayjs(item.createdAt).isSame(selectedQuarter, 'quarter'))
+          : rawData;
+
+      // 2. Group by Customer
+      const grouped: Record<number, any> = {};
+      
+      filtered.forEach((c: any) => {
+          if (!grouped[c.customerId]) {
+              grouped[c.customerId] = {
+                  key: c.customerId,
+                  customerId: c.customerId,
+                  customerName: c.customer?.name || 'Unknown',
+                  totalCommission: 0,
+                  contractAmount: Number(c.amount),
+                  details: {
+                      CHANCE: [],
+                      CALL: [],
+                      TOUCH: [],
+                      DEAL: [],
+                      DEPT: []
+                  }
+              };
+          }
+          
+          const group = grouped[c.customerId];
+          group.totalCommission += Number(c.commission);
+          group.contractAmount = Math.max(group.contractAmount, Number(c.amount));
+
+          const detail = {
+              id: c.id,
+              userName: c.user?.name,
+              amount: Number(c.commission),
+              status: c.status
+          };
+
+          if (group.details[c.type]) {
+              group.details[c.type].push(detail);
+          }
+      });
+
+      setData(Object.values(grouped));
   };
 
-  const handleEdit = (record: any) => {
-      setEditingRecord(record);
+  const handleEdit = (detail: any) => {
+      if (!isAdminOrManager) return;
+      setEditingRecord(detail);
       form.setFieldsValue({
-          commission: record.commission,
+          commission: detail.amount,
       });
       setIsModalOpen(true);
   };
@@ -70,107 +105,92 @@ const CommissionPage = () => {
       }
   };
 
-  const handleApprove = async (id: number) => {
-      try {
-          await api.patch(`/commission/${id}/approve`);
-          message.success('审批通过');
-          fetchData();
-      } catch (error) {
-          message.error('审批失败');
-      }
+  const renderDetailCell = (details: any[]) => {
+      if (!details || details.length === 0) return <span style={{ color: '#ccc' }}>-</span>;
+      return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {details.map((d: any) => (
+                  <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                      <span style={{ marginRight: 8 }}>{d.userName}:</span>
+                      <Tooltip title={isAdminOrManager ? "点击修改" : ""}>
+                          <span 
+                              style={{ 
+                                  fontWeight: 'bold', 
+                                  cursor: isAdminOrManager ? 'pointer' : 'default',
+                                  color: isAdminOrManager ? '#1677ff' : 'inherit',
+                                  textDecoration: isAdminOrManager ? 'underline' : 'none'
+                              }}
+                              onClick={() => handleEdit(d)}
+                          >
+                              ¥{d.amount}
+                          </span>
+                      </Tooltip>
+                  </div>
+              ))}
+          </div>
+      );
   };
 
   const columns = [
     {
-      title: '姓名',
-      dataIndex: ['user', 'name'],
-      key: 'name',
-      render: (text: string, record: any) => (
-        <div>
-          <div style={{ fontWeight: 500 }}>{text}</div>
-          {/* Role not populated in include, assume handled by backend or add include */}
-        </div>
-      )
-    },
-    {
       title: '客户',
-      dataIndex: ['customer', 'name'],
-      key: 'customer',
-    },
-    {
-      title: '提成环节',
-      dataIndex: 'type',
-      key: 'type',
-      render: (type: string) => {
-          const map: Record<string, string> = {
-              'CHANCE': '客资提成',
-              'CALL': '约访提成',
-              'TOUCH': '接待提成',
-              'DEAL': '签约提成',
-              'DEPT': '部门管理提成'
-          };
-          return <Tag color="geekblue">{map[type] || type}</Tag>;
-      }
+      dataIndex: 'customerName',
+      key: 'customerName',
+      fixed: 'left',
+      width: 120,
     },
     {
       title: '签约金额',
-      dataIndex: 'amount',
-      key: 'amount',
-      render: (val: number) => `¥${Number(val).toLocaleString()}`,
+      dataIndex: 'contractAmount',
+      key: 'contractAmount',
+      width: 120,
+      render: (val: number) => `¥${val.toLocaleString()}`,
     },
     {
-      title: '提成金额',
-      dataIndex: 'commission',
-      key: 'commission',
-      render: (val: number) => <span style={{ color: '#cf1322', fontWeight: 'bold' }}>¥{Number(val).toLocaleString()}</span>,
+      title: '总提成',
+      dataIndex: 'totalCommission',
+      key: 'totalCommission',
+      width: 120,
+      render: (val: number) => <span style={{ color: '#cf1322', fontWeight: 'bold' }}>¥{val.toLocaleString()}</span>,
     },
     {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => {
-          if (status === 'APPROVED') return <Tag color="green">已审核</Tag>;
-          if (status === 'PAID') return <Tag color="blue">已发放</Tag>;
-          return <Tag color="orange">待审核</Tag>;
-      }
+      title: '客资提成 (CHANCE)',
+      dataIndex: ['details', 'CHANCE'],
+      key: 'CHANCE',
+      width: 180,
+      render: (val: any) => renderDetailCell(val),
     },
     {
-        title: '生成时间',
-        dataIndex: 'createdAt',
-        key: 'createdAt',
-        render: (date: string) => dayjs(date).format('YYYY-MM-DD HH:mm'),
+      title: '约访提成 (CALL)',
+      dataIndex: ['details', 'CALL'],
+      key: 'CALL',
+      width: 180,
+      render: (val: any) => renderDetailCell(val),
     },
     {
-        title: '操作',
-        key: 'action',
-        render: (_: any, record: any) => {
-            if (!isAdminOrManager) return null;
-            return (
-                <Space>
-                    <Button 
-                        type="link" 
-                        icon={<EditOutlined />} 
-                        onClick={() => handleEdit(record)}
-                    >
-                        编辑
-                    </Button>
-                    {record.status === 'PENDING' && (
-                        <Button 
-                            type="link" 
-                            style={{ color: '#52c41a' }}
-                            icon={<CheckOutlined />} 
-                            onClick={() => handleApprove(record.id)}
-                        >
-                            通过
-                        </Button>
-                    )}
-                </Space>
-            );
-        }
+      title: '接待提成 (TOUCH)',
+      dataIndex: ['details', 'TOUCH'],
+      key: 'TOUCH',
+      width: 180,
+      render: (val: any) => renderDetailCell(val),
+    },
+    {
+      title: '签约提成 (DEAL)',
+      dataIndex: ['details', 'DEAL'],
+      key: 'DEAL',
+      width: 180,
+      render: (val: any) => renderDetailCell(val),
+    },
+    {
+      title: '部门管理 (DEPT)',
+      dataIndex: ['details', 'DEPT'],
+      key: 'DEPT',
+      width: 180,
+      render: (val: any) => renderDetailCell(val),
     }
   ];
 
-  const totalCommission = filteredData.reduce((sum, item) => sum + Number(item.commission || 0), 0);
+  const totalCommission = data.reduce((sum, item) => sum + item.totalCommission, 0);
 
   return (
     <div>
@@ -193,10 +213,12 @@ const CommissionPage = () => {
         }
       >
         <Table 
-            columns={columns} 
-            dataSource={filteredData} 
-            rowKey="id" 
+            columns={columns as any} 
+            dataSource={data} 
+            rowKey="key" 
             loading={loading}
+            scroll={{ x: 1200 }}
+            pagination={{ pageSize: 10 }}
         />
       </Card>
 
