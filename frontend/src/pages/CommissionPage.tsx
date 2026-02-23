@@ -31,7 +31,7 @@ const CommissionPage = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/commission/estimates');
+      const response = await api.get('/commission');
       setData(response.data);
     } catch (error) {
       message.error('获取提成数据失败');
@@ -41,20 +41,20 @@ const CommissionPage = () => {
   };
 
   const filterData = () => {
+    // Basic date filtering based on createdAt (simplified)
     if (!selectedQuarter) {
       setFilteredData(data);
       return;
     }
-    const q = Math.ceil((selectedQuarter.month() + 1) / 3);
-    const quarterStr = `${selectedQuarter.year()}-Q${q}`;
-    setFilteredData(data.filter((item: any) => item.quarter === quarterStr));
+    setFilteredData(data.filter((item: any) => {
+        return dayjs(item.createdAt).isSame(selectedQuarter, 'quarter');
+    }));
   };
 
   const handleEdit = (record: any) => {
       setEditingRecord(record);
       form.setFieldsValue({
-          rate: record.rate, // Use rate instead of amount
-          note: record.note
+          commission: record.commission,
       });
       setIsModalOpen(true);
   };
@@ -88,57 +88,34 @@ const CommissionPage = () => {
       render: (text: string, record: any) => (
         <div>
           <div style={{ fontWeight: 500 }}>{text}</div>
-          <Tag color="blue">{record.user.role}</Tag>
+          {/* Role not populated in include, assume handled by backend or add include */}
         </div>
       )
     },
     {
       title: '客户',
-      dataIndex: ['payment', 'contract', 'customer', 'name'],
+      dataIndex: ['customer', 'name'],
       key: 'customer',
     },
     {
-      title: '提成阶段',
-      dataIndex: 'stage',
-      key: 'stage',
-      render: (stage: string, record: any) => (
-          <Space>
-              <Tag>{stage}</Tag>
-              {/* Show the actor who performed the action if it's different from the beneficiary */}
-              {record.saleLog?.actor && record.saleLog.actorId !== record.userId && (
-                  <span style={{ fontSize: 12, color: '#999' }}>
-                      (操作人: {record.saleLog.actor.name})
-                  </span>
-              )}
-          </Space>
-      )
-    },
-    {
-      title: '回款金额',
-      dataIndex: 'baseAmount',
-      key: 'baseAmount',
+      title: '签约金额',
+      dataIndex: 'amount',
+      key: 'amount',
       render: (val: number) => `¥${Number(val).toLocaleString()}`,
     },
     {
-      title: '提成比例',
-      dataIndex: 'rate',
-      key: 'rate',
-      render: (val: number) => `${(Number(val) * 100).toFixed(2)}%`,
-    },
-    {
       title: '提成金额',
-      dataIndex: 'amount',
-      key: 'amount',
+      dataIndex: 'commission',
+      key: 'commission',
       render: (val: number) => <span style={{ color: '#cf1322', fontWeight: 'bold' }}>¥{Number(val).toLocaleString()}</span>,
     },
-    // Requirement 3.2: Delete status? Or just show "Approved"?
-    // Let's show "Status" but simplifying content.
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => {
           if (status === 'APPROVED') return <Tag color="green">已审核</Tag>;
+          if (status === 'PAID') return <Tag color="blue">已发放</Tag>;
           return <Tag color="orange">待审核</Tag>;
       }
     },
@@ -162,7 +139,7 @@ const CommissionPage = () => {
                     >
                         编辑
                     </Button>
-                    {record.status !== 'APPROVED' && (
+                    {record.status === 'PENDING' && (
                         <Button 
                             type="link" 
                             style={{ color: '#52c41a' }}
@@ -178,14 +155,14 @@ const CommissionPage = () => {
     }
   ];
 
-  const totalCommission = filteredData.reduce((sum, item) => sum + Number(item.amount), 0);
+  const totalCommission = filteredData.reduce((sum, item) => sum + Number(item.commission || 0), 0);
 
   return (
     <div>
       <Card 
         title={
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>提成测算</span>
+                <span>提成管理</span>
                 <span style={{ fontSize: 14, fontWeight: 'normal', color: '#666' }}>
                     本季预计总提成: <span style={{ color: '#cf1322', fontSize: 18, fontWeight: 'bold' }}>¥{totalCommission.toLocaleString()}</span>
                 </span>
@@ -209,17 +186,14 @@ const CommissionPage = () => {
       </Card>
 
       <Modal 
-        title="编辑提成记录" 
+        title="编辑提成" 
         open={isModalOpen} 
         onCancel={() => setIsModalOpen(false)} 
         onOk={() => form.submit()}
       >
           <Form form={form} layout="vertical" onFinish={handleUpdate}>
-              <Form.Item name="rate" label="提成比例 (小数, 如 0.03 代表 3%)" rules={[{ required: true }]}>
-                  <InputNumber style={{ width: '100%' }} step={0.01} precision={4} />
-              </Form.Item>
-              <Form.Item name="note" label="备注">
-                  <Input.TextArea rows={3} />
+              <Form.Item name="commission" label="提成金额" rules={[{ required: true }]}>
+                  <InputNumber style={{ width: '100%' }} prefix="¥" precision={2} />
               </Form.Item>
           </Form>
       </Modal>

@@ -1,8 +1,98 @@
 import express from 'express';
 import prisma from '../lib/prisma';
 import bcrypt from 'bcryptjs';
+import { authenticate } from '../lib/middleware';
+import { getAccessibleUserIds } from '../lib/utils';
+import dayjs from 'dayjs';
 
 const router = express.Router();
+
+// === STATS ROUTES ===
+router.get('/stats/team', authenticate, async (req: any, res) => {
+    try {
+        const { month } = req.query; // YYYY-MM
+        const startOfMonth = dayjs(month as string).startOf('month').toDate();
+        const endOfMonth = dayjs(month as string).endOf('month').toDate();
+
+        const accessibleIds = await getAccessibleUserIds(req.user);
+        
+        // 1. Get Users
+        const usersWhere: any = { status: { not: 'TERMINATED' } };
+        if (accessibleIds) {
+            usersWhere.id = { in: accessibleIds };
+        }
+        
+        const users = await prisma.user.findMany({
+            where: usersWhere,
+            select: { id: true, name: true, role: true }
+        });
+
+        // 2. Aggregate Data for each user
+        const stats = await Promise.all(users.map(async (user) => {
+            // Count Customers created in this month (Leads)
+            const leadCount = await prisma.customer.count({
+                where: {
+                    ownerId: user.id,
+                    createdAt: { gte: startOfMonth, lte: endOfMonth }
+                }
+            });
+
+            // Count Deals in this month (from SaleLog or Customer status change?)
+            // Let's use SaleLog for accuracy of *when* it happened
+            const dealLogs = await prisma.saleLog.findMany({
+                where: {
+                    actorId: user.id, // Or customer.ownerId? Usually actorId is the sales rep
+                    stage: 'DEAL',
+                    occurredAt: { gte: startOfMonth, lte: endOfMonth }
+                },
+                select: { dealAmount: true } // We added this field
+            });
+            
+            const dealCount = dealLogs.length;
+            const contractAmount = dealLogs.reduce((sum, log) => sum + Number(log.dealAmount || 0), 0);
+
+            // Other stages counts
+            const chanceCount = await prisma.saleLog.count({
+                where: { actorId: user.id, stage: 'CHANCE', occurredAt: { gte: startOfMonth, lte: endOfMonth } }
+            });
+            const callCount = await prisma.saleLog.count({
+                where: { actorId: user.id, stage: 'CALL', occurredAt: { gte: startOfMonth, lte: endOfMonth } }
+            });
+            const touchCount = await prisma.saleLog.count({
+                where: { actorId: user.id, stage: 'TOUCH', occurredAt: { gte: startOfMonth, lte: endOfMonth } }
+            });
+
+            // Get Sales Target
+            const target = await prisma.salesTarget.findFirst({
+                where: {
+                    userId: user.id,
+                    month: month as string
+                }
+            });
+            const targetAmount = target ? Number(target.amount) : 0;
+
+            return {
+                id: user.id,
+                name: user.name,
+                role: user.role,
+                leadCount,
+                chanceCount,
+                callCount,
+                touchCount,
+                dealCount,
+                contractAmount,
+                targetAmount,
+                completionRate: targetAmount ? (contractAmount / targetAmount) * 100 : 0
+            };
+        }));
+
+        res.json(stats);
+    } catch (error) {
+        console.error('Error fetching stats:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 
 // === CHANNEL ROUTES ===
 
@@ -243,9 +333,21 @@ router.get('/organization', async (req, res) => {
 // === SALES TARGET ROUTES ===
 
 // Get Sales Targets
-router.get('/sales-target', async (req, res) => {
+router.get('/sales-target', authenticate, async (req: any, res) => {
     try {
+        const accessibleIds = await getAccessibleUserIds(req.user);
+        
+        const where: any = {};
+        if (accessibleIds) {
+            where.userId = { in: accessibleIds };
+        }
+
         const targets = await prisma.salesTarget.findMany({
+            where,
+            include: {
+                user: { select: { name: true } },
+                // department: { select: { name: true } } // Not in schema directly, accessed via user
+            },
             orderBy: { month: 'desc' }
         });
         res.json(targets);
@@ -256,7 +358,9 @@ router.get('/sales-target', async (req, res) => {
 });
 
 // Create/Update Sales Target (Upsert)
-router.post('/sales-target', async (req, res) => {
+router.post('/sales-target', authenticate, async (req, res) => {
+    // ... (Keep existing logic, maybe verify permission to edit target?)
+    // For now, assume managers/admins can edit anyone
     const { userId, month, amount } = req.body;
     try {
         const target = await prisma.salesTarget.upsert({
@@ -283,7 +387,64 @@ router.post('/sales-target', async (req, res) => {
 });
 
 
-// === PAYMENT ROUTES ===
+// === COMMISSION ROUTES ===
+router.get('/commission', authenticate, async (req: any, res) => {
+    try {
+        const accessibleIds = await getAccessibleUserIds(req.user);
+        
+        const where: any = {};
+        if (accessibleIds) {
+            where.userId = { in: accessibleIds };
+        }
+
+        const commissions = await prisma.commission.findMany({
+            where,
+            include: {
+                user: { select: { name: true } },
+                customer: { select: { name: true } }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(commissions);
+    } catch (error) {
+        console.error('Error fetching commissions:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Update Commission
+router.put('/commission/:id', authenticate, async (req: any, res) => {
+    const { id } = req.params;
+    const { commission, status } = req.body;
+    try {
+        const updated = await prisma.commission.update({
+            where: { id: Number(id) },
+            data: {
+                commission: commission ? Number(commission) : undefined,
+                status: status || undefined
+            }
+        });
+        res.json(updated);
+    } catch (error) {
+        console.error('Error updating commission:', error);
+        res.status(500).json({ message: 'Failed to update commission' });
+    }
+});
+
+// Approve Commission
+router.patch('/commission/:id/approve', authenticate, async (req: any, res) => {
+    const { id } = req.params;
+    try {
+        const updated = await prisma.commission.update({
+            where: { id: Number(id) },
+            data: { status: 'APPROVED' }
+        });
+        res.json(updated);
+    } catch (error) {
+        console.error('Error approving commission:', error);
+        res.status(500).json({ message: 'Failed to approve commission' });
+    }
+});
 router.get('/payment', async (req, res) => {
     res.json([]);
 });

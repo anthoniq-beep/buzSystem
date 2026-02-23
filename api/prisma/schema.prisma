@@ -60,6 +60,13 @@ enum ChannelStatus {
   INACTIVE
 }
 
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+}
+
 // --------------------------------------------------------
 // Models
 // --------------------------------------------------------
@@ -87,6 +94,7 @@ model User {
   customers    Customer[]     // 负责的客户
   saleLogs     SaleLog[]      // 销售记录
   salesTargets SalesTarget[]  // 销售目标
+  commissions  Commission[]   // 佣金记录
   
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
@@ -150,6 +158,7 @@ model Customer {
   
   // 销售日志
   saleLogs      SaleLog[]
+  commissions   Commission[] // 佣金关联
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -191,4 +200,25 @@ model SalesTarget {
 
   @@unique([userId, month])
   @@map("sales_targets")
+}
+
+// 佣金记录
+model Commission {
+  id            Int              @id @default(autoincrement())
+  
+  userId        Int
+  user          User             @relation(fields: [userId], references: [id])
+  
+  customerId    Int
+  customer      Customer         @relation(fields: [customerId], references: [id])
+  
+  amount        Decimal          @db.Decimal(12, 2) // 签约金额
+  commission    Decimal?         @db.Decimal(12, 2) // 佣金金额
+  
+  status        CommissionStatus @default(PENDING)
+  
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@map("commissions")
 }
