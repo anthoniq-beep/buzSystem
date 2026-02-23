@@ -166,21 +166,29 @@ router.post('/:id/log', authenticate, async (req: any, res) => {
                 });
                 const actorsMap = new Map(actors.map(u => [u.id, u]));
                 
-                // Fetch managers of involved departments
+                // Fetch managers of involved departments -> CHANGED TO VIRTUAL USERS (Dept Name)
                 const deptIds = new Set<number>();
                 actors.forEach(u => { if(u.departmentId) deptIds.add(u.departmentId); });
                 
-                let deptManagers = new Map<number, number>();
+                let deptVirtualUsers = new Map<number, number>();
                 if (deptIds.size > 0) {
-                    const managers = await prisma.user.findMany({
-                        where: { 
-                            departmentId: { in: Array.from(deptIds) },
-                            role: 'MANAGER'
-                        },
-                        select: { id: true, departmentId: true }
+                    // 1. Get Dept Names
+                    const depts = await prisma.department.findMany({
+                        where: { id: { in: Array.from(deptIds) } }
                     });
-                    managers.forEach(m => {
-                        if (m.departmentId) deptManagers.set(m.departmentId, m.id);
+                    const deptNames = depts.map(d => d.name);
+                    
+                    // 2. Find Users with Dept Names
+                    const virtualUsers = await prisma.user.findMany({
+                        where: { name: { in: deptNames } }
+                    });
+                    
+                    // 3. Map DeptID -> VirtualUserID
+                    depts.forEach(d => {
+                        const vUser = virtualUsers.find(u => u.name === d.name);
+                        if (vUser) {
+                            deptVirtualUsers.set(d.id, vUser.id);
+                        }
                     });
                 }
 
@@ -190,11 +198,11 @@ router.post('/:id/log', authenticate, async (req: any, res) => {
                     if (category === 'COMPANY') {
                         // User 1%
                         commissionData.push({ userId: chanceLog.actorId, customerId, amount, commission: amount * 0.01, status: 'PENDING', type: 'CHANCE' });
-                        // Dept 2%
+                        // Dept 2% -> Virtual User
                         const actor = actorsMap.get(chanceLog.actorId);
                         if (actor?.departmentId) {
-                            const mgrId = deptManagers.get(actor.departmentId);
-                            if (mgrId) commissionData.push({ userId: mgrId, customerId, amount, commission: amount * 0.02, status: 'PENDING', type: 'DEPT' });
+                            const vUserId = deptVirtualUsers.get(actor.departmentId);
+                            if (vUserId) commissionData.push({ userId: vUserId, customerId, amount, commission: amount * 0.02, status: 'PENDING', type: 'DEPT' });
                         }
                     } else {
                         // Personal 3%
@@ -223,8 +231,8 @@ router.post('/:id/log', authenticate, async (req: any, res) => {
                     commissionData.push({ userId: dealActor.id, customerId, amount, commission: amount * userRate, status: 'PENDING', type: 'DEAL' });
                     
                     if (deptRate > 0 && dealActor.departmentId) {
-                        const mgrId = deptManagers.get(dealActor.departmentId);
-                        if (mgrId) commissionData.push({ userId: mgrId, customerId, amount, commission: amount * deptRate, status: 'PENDING', type: 'DEPT' });
+                        const vUserId = deptVirtualUsers.get(dealActor.departmentId);
+                        if (vUserId) commissionData.push({ userId: vUserId, customerId, amount, commission: amount * deptRate, status: 'PENDING', type: 'DEPT' });
                     }
                 }
 
