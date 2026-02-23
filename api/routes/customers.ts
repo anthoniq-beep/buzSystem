@@ -24,6 +24,10 @@ router.get('/', authenticate, async (req: any, res) => {
                     name: true,
                     username: true
                 }
+            },
+            source: true, // Include channel info
+            saleLogs: {
+                orderBy: { occurredAt: 'desc' } // Order logs by date descending
             }
         },
         orderBy: { updatedAt: 'desc' }
