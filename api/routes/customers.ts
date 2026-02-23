@@ -144,80 +144,95 @@ router.post('/:id/log', authenticate, async (req: any, res) => {
             });
             
             if (customer) {
-                // Helper to create commission
-                const createComm = async (uid: number, rate: number, type: any) => {
-                    await prisma.commission.create({
-                        data: {
-                            userId: uid,
-                            customerId,
-                            amount,
-                            commission: amount * rate,
-                            status: 'PENDING',
-                            type
-                        }
+                const logs = customer.saleLogs;
+                const commissionData: any[] = [];
+                
+                // Identify Actors
+                const chanceLog = logs.find((l: any) => l.stage === 'CHANCE');
+                const callLog = logs.find((l: any) => l.stage === 'CALL');
+                const touchLog = logs.find((l: any) => l.stage === 'TOUCH');
+                const dealActorId = req.user.userId;
+                
+                const actorIds = new Set<number>();
+                if (chanceLog) actorIds.add(chanceLog.actorId);
+                if (callLog) actorIds.add(callLog.actorId);
+                if (touchLog) actorIds.add(touchLog.actorId);
+                actorIds.add(dealActorId);
+                
+                // Fetch all actors
+                const actors = await prisma.user.findMany({
+                    where: { id: { in: Array.from(actorIds) } },
+                    include: { department: true }
+                });
+                const actorsMap = new Map(actors.map(u => [u.id, u]));
+                
+                // Fetch managers of involved departments
+                const deptIds = new Set<number>();
+                actors.forEach(u => { if(u.departmentId) deptIds.add(u.departmentId); });
+                
+                let deptManagers = new Map<number, number>();
+                if (deptIds.size > 0) {
+                    const managers = await prisma.user.findMany({
+                        where: { 
+                            departmentId: { in: Array.from(deptIds) },
+                            role: 'MANAGER'
+                        },
+                        select: { id: true, departmentId: true }
                     });
-                };
+                    managers.forEach(m => {
+                        if (m.departmentId) deptManagers.set(m.departmentId, m.id);
+                    });
+                }
 
                 // 3.1 CHANCE Commission
-                const chanceLog = customer.saleLogs.find((l: any) => l.stage === 'CHANCE');
                 if (chanceLog) {
                     const category = customer.channel?.category || 'COMPANY';
-                    
                     if (category === 'COMPANY') {
                         // User 1%
-                        await createComm(chanceLog.actorId, 0.01, 'CHANCE');
-                        // Dept 2% (Assign to Manager of Dept)
-                        const chanceActor = await prisma.user.findUnique({ where: { id: chanceLog.actorId } });
-                        if (chanceActor?.departmentId) {
-                            const manager = await prisma.user.findFirst({
-                                where: { departmentId: chanceActor.departmentId, role: 'MANAGER' }
-                            });
-                            if (manager) {
-                                await createComm(manager.id, 0.02, 'DEPT');
-                            }
+                        commissionData.push({ userId: chanceLog.actorId, customerId, amount, commission: amount * 0.01, status: 'PENDING', type: 'CHANCE' });
+                        // Dept 2%
+                        const actor = actorsMap.get(chanceLog.actorId);
+                        if (actor?.departmentId) {
+                            const mgrId = deptManagers.get(actor.departmentId);
+                            if (mgrId) commissionData.push({ userId: mgrId, customerId, amount, commission: amount * 0.02, status: 'PENDING', type: 'DEPT' });
                         }
                     } else {
-                        // Personal -> User 3%
-                        await createComm(chanceLog.actorId, 0.03, 'CHANCE');
+                        // Personal 3%
+                        commissionData.push({ userId: chanceLog.actorId, customerId, amount, commission: amount * 0.03, status: 'PENDING', type: 'CHANCE' });
                     }
                 }
 
                 // 3.2 CALL Commission (2%)
-                const callLog = customer.saleLogs.find((l: any) => l.stage === 'CALL');
                 if (callLog) {
-                    await createComm(callLog.actorId, 0.02, 'CALL');
+                    commissionData.push({ userId: callLog.actorId, customerId, amount, commission: amount * 0.02, status: 'PENDING', type: 'CALL' });
                 }
 
                 // 3.3 TOUCH Commission (2%)
-                const touchLog = customer.saleLogs.find((l: any) => l.stage === 'TOUCH');
                 if (touchLog) {
-                    await createComm(touchLog.actorId, 0.02, 'TOUCH');
+                    commissionData.push({ userId: touchLog.actorId, customerId, amount, commission: amount * 0.02, status: 'PENDING', type: 'TOUCH' });
                 }
 
                 // 3.4 DEAL Commission
-                const dealActor = await prisma.user.findUnique({ where: { id: req.user.userId } });
+                const dealActor = actorsMap.get(dealActorId);
                 if (dealActor) {
                     let userRate = 0.01;
                     let deptRate = 0.02;
-
-                    if (dealActor.role === 'MANAGER') {
-                        userRate = 0.03;
-                        deptRate = 0;
-                    } else if (dealActor.role === 'SUPERVISOR') {
-                        userRate = 0.02;
-                        deptRate = 0.01;
-                    }
+                    if (dealActor.role === 'MANAGER') { userRate = 0.03; deptRate = 0; }
+                    else if (dealActor.role === 'SUPERVISOR') { userRate = 0.02; deptRate = 0.01; }
                     
-                    await createComm(dealActor.id, userRate, 'DEAL');
+                    commissionData.push({ userId: dealActor.id, customerId, amount, commission: amount * userRate, status: 'PENDING', type: 'DEAL' });
                     
                     if (deptRate > 0 && dealActor.departmentId) {
-                        const manager = await prisma.user.findFirst({
-                            where: { departmentId: dealActor.departmentId, role: 'MANAGER' }
-                        });
-                        if (manager) {
-                            await createComm(manager.id, deptRate, 'DEPT');
-                        }
+                        const mgrId = deptManagers.get(dealActor.departmentId);
+                        if (mgrId) commissionData.push({ userId: mgrId, customerId, amount, commission: amount * deptRate, status: 'PENDING', type: 'DEPT' });
                     }
+                }
+
+                // Batch Insert
+                if (commissionData.length > 0) {
+                    await prisma.commission.createMany({
+                        data: commissionData
+                    });
                 }
             }
         }

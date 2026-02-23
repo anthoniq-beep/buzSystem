@@ -98,6 +98,21 @@ const CommissionPage = () => {
       key: 'customer',
     },
     {
+      title: '提成环节',
+      dataIndex: 'type',
+      key: 'type',
+      render: (type: string) => {
+          const map: Record<string, string> = {
+              'CHANCE': '客资提成',
+              'CALL': '约访提成',
+              'TOUCH': '接待提成',
+              'DEAL': '签约提成',
+              'DEPT': '部门管理提成'
+          };
+          return <Tag color="geekblue">{map[type] || type}</Tag>;
+      }
+    },
+    {
       title: '签约金额',
       dataIndex: 'amount',
       key: 'amount',
