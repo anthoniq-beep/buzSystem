@@ -54,25 +54,29 @@ const ContractPage = () => {
 
   const contractContent = useMemo(() => {
       let content = CONTRACT_TEMPLATE;
+      
+      const wrapBlue = (text: string) => `<span style="color: #1677ff; font-weight: bold; padding: 0 4px;">${text}</span>`;
+      const placeholder = (text: string) => `<span style="color: #ccc;">${text}</span>`;
+
       // Replace placeholders
-      content = content.replace(/\[合同编号\]/g, contractNo || '________________');
-      content = content.replace(/\[学员姓名\]/g, formValues.studentName || '<span style="color: #ccc;">(学员姓名)</span>');
-      content = content.replace(/\[身份证号\]/g, formValues.idCard || '<span style="color: #ccc;">(身份证号)</span>');
-      content = content.replace(/\[手机号\]/g, formValues.phone || '<span style="color: #ccc;">(手机号)</span>');
+      content = content.replace(/\[合同编号\]/g, wrapBlue(contractNo || '________________'));
+      content = content.replace(/\[学员姓名\]/g, formValues.studentName ? wrapBlue(formValues.studentName) : placeholder('(学员姓名)'));
+      content = content.replace(/\[身份证号\]/g, formValues.idCard ? wrapBlue(formValues.idCard) : placeholder('(身份证号)'));
+      content = content.replace(/\[手机号\]/g, formValues.phone ? wrapBlue(formValues.phone) : placeholder('(手机号)'));
       
       const today = dayjs().format('YYYY年MM月DD日');
       const endDate = dayjs().add(1, 'year').format('YYYY年MM月DD日');
-      content = content.replace(/\[today\]/g, today);
-      content = content.replace(/\[end_date\]/g, endDate);
+      content = content.replace(/\[today\]/g, wrapBlue(today));
+      content = content.replace(/\[end_date\]/g, wrapBlue(endDate));
       
-      content = content.replace(/\[课程名称\]/g, formValues.courseName || '<span style="color: #ccc;">(课程名称)</span>');
+      content = content.replace(/\[课程名称\]/g, formValues.courseName ? wrapBlue(formValues.courseName) : placeholder('(课程名称)'));
       
-      const price = formValues.courseAmount ? `¥${formValues.courseAmount}` : '<span style="color: #ccc;">(金额)</span>';
+      const price = formValues.courseAmount ? wrapBlue(`¥${formValues.courseAmount}`) : placeholder('(金额)');
       // Global replace for price (multiple occurrences)
       content = content.split('[课程价格]').join(price);
       content = content.split('[合同单价]').join(price);
       
-      const priceUpper = formValues.courseAmount ? digitUppercase(formValues.courseAmount) : '________________';
+      const priceUpper = formValues.courseAmount ? wrapBlue(digitUppercase(formValues.courseAmount)) : '________________';
       content = content.replace(/\[合同单价大写\]/g, priceUpper);
       
       return content;
@@ -172,6 +176,7 @@ const ContractPage = () => {
             style={{ 
                 padding: '40px', 
                 background: 'white', 
+                color: '#000', // Ensure text is black
                 boxShadow: '0 0 10px rgba(0,0,0,0.1)',
                 minHeight: '100%',
                 fontFamily: 'SimSun, serif' // Songti for contract look
