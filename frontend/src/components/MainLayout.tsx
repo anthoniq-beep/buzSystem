@@ -15,6 +15,7 @@ import {
   ShareAltOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 import { Role } from '../types';
@@ -87,6 +88,11 @@ const MainLayout = () => {
       key: '/commission',
       icon: <DollarOutlined />,
       label: '佣金查询',
+    },
+    {
+      key: '/contract',
+      icon: <FileTextOutlined />,
+      label: '合同签约',
     },
     // Admin routes
     ...(user?.role === Role.ADMIN || user?.role === Role.MANAGER || user?.role === Role.SUPERVISOR ? [{

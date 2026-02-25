@@ -144,6 +144,9 @@ router.post('/:id/log', authenticate, async (req: any, res) => {
             });
             
             if (customer) {
+                const pointsRaw = Number(customer.channel?.points || 0);
+                const pointsRate = pointsRaw > 1 ? pointsRaw / 100 : pointsRaw;
+                const netAmount = amount * (1 - pointsRate);
                 const logs = customer.saleLogs;
                 const commissionData: any[] = [];
                 
@@ -196,28 +199,25 @@ router.post('/:id/log', authenticate, async (req: any, res) => {
                 if (chanceLog) {
                     const category = customer.channel?.category || 'COMPANY';
                     if (category === 'COMPANY') {
-                        // User 1%
-                        commissionData.push({ userId: chanceLog.actorId, customerId, amount, commission: amount * 0.01, status: 'PENDING', type: 'CHANCE' });
-                        // Dept 2% -> Virtual User
+                        commissionData.push({ userId: chanceLog.actorId, customerId, amount, commission: netAmount * 0.01, status: 'PENDING', type: 'CHANCE' });
                         const actor = actorsMap.get(chanceLog.actorId);
                         if (actor?.departmentId) {
                             const vUserId = deptVirtualUsers.get(actor.departmentId);
-                            if (vUserId) commissionData.push({ userId: vUserId, customerId, amount, commission: amount * 0.02, status: 'PENDING', type: 'DEPT' });
+                            if (vUserId) commissionData.push({ userId: vUserId, customerId, amount, commission: netAmount * 0.02, status: 'PENDING', type: 'DEPT' });
                         }
                     } else {
-                        // Personal 3%
-                        commissionData.push({ userId: chanceLog.actorId, customerId, amount, commission: amount * 0.03, status: 'PENDING', type: 'CHANCE' });
+                        commissionData.push({ userId: chanceLog.actorId, customerId, amount, commission: netAmount * 0.03, status: 'PENDING', type: 'CHANCE' });
                     }
                 }
 
                 // 3.2 CALL Commission (2%)
                 if (callLog) {
-                    commissionData.push({ userId: callLog.actorId, customerId, amount, commission: amount * 0.02, status: 'PENDING', type: 'CALL' });
+                    commissionData.push({ userId: callLog.actorId, customerId, amount, commission: netAmount * 0.02, status: 'PENDING', type: 'CALL' });
                 }
 
                 // 3.3 TOUCH Commission (2%)
                 if (touchLog) {
-                    commissionData.push({ userId: touchLog.actorId, customerId, amount, commission: amount * 0.02, status: 'PENDING', type: 'TOUCH' });
+                    commissionData.push({ userId: touchLog.actorId, customerId, amount, commission: netAmount * 0.02, status: 'PENDING', type: 'TOUCH' });
                 }
 
                 // 3.4 DEAL Commission
@@ -228,11 +228,11 @@ router.post('/:id/log', authenticate, async (req: any, res) => {
                     if (dealActor.role === 'MANAGER') { userRate = 0.03; deptRate = 0; }
                     else if (dealActor.role === 'SUPERVISOR') { userRate = 0.02; deptRate = 0.01; }
                     
-                    commissionData.push({ userId: dealActor.id, customerId, amount, commission: amount * userRate, status: 'PENDING', type: 'DEAL' });
+                    commissionData.push({ userId: dealActor.id, customerId, amount, commission: netAmount * userRate, status: 'PENDING', type: 'DEAL' });
                     
                     if (deptRate > 0 && dealActor.departmentId) {
                         const vUserId = deptVirtualUsers.get(dealActor.departmentId);
-                        if (vUserId) commissionData.push({ userId: vUserId, customerId, amount, commission: amount * deptRate, status: 'PENDING', type: 'DEPT' });
+                        if (vUserId) commissionData.push({ userId: vUserId, customerId, amount, commission: netAmount * deptRate, status: 'PENDING', type: 'DEPT' });
                     }
                 }
 

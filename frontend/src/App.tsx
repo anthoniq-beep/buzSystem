@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import CustomerList from './pages/CustomerList';
 import CustomerDetail from './pages/CustomerDetail';
 import CommissionPage from './pages/CommissionPage';
+import ContractPage from './pages/ContractPage';
 import AdminDashboard from './pages/AdminDashboard';
 import OrganizationPage from './pages/admin/OrganizationPage';
 import SalesTargetPage from './pages/admin/SalesTargetPage';
@@ -38,6 +39,7 @@ function App() {
         <Route path="customers" element={<CustomerList />} />
         <Route path="customer/:id" element={<CustomerDetail />} />
         <Route path="commission" element={<CommissionPage />} />
+        <Route path="contract" element={<ContractPage />} />
         
         {/* Role Based Routes */}
         <Route path="admin/dashboard" element={<RoleRoute roles={[Role.ADMIN, Role.MANAGER, Role.SUPERVISOR]}><AdminDashboard /></RoleRoute>} />

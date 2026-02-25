@@ -493,7 +493,12 @@ router.get('/commission', authenticate, async (req: any, res) => {
             where,
             include: {
                 user: { select: { name: true } },
-                customer: { select: { name: true } }
+                customer: { 
+                    select: { 
+                        name: true,
+                        channel: true // Include channel info to get points
+                    } 
+                }
             },
             orderBy: { createdAt: 'desc' }
         });
