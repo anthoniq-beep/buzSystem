@@ -70,7 +70,7 @@ router.get('/:id', authenticate, async (req, res) => {
 
 // Create customer
 router.post('/', authenticate, async (req: any, res) => {
-    const { name, phone, sourceId, ownerId, companyName } = req.body;
+    const { name, phone, sourceId, ownerId, companyName, courseType, courseName } = req.body;
     console.log(`User ${req.user?.userId} creating customer:`, req.body); // Debug log
 
     try {
@@ -81,7 +81,9 @@ router.post('/', authenticate, async (req: any, res) => {
                 companyName,
                 channelId: sourceId ? parseInt(sourceId) : null,
                 ownerId: ownerId ? parseInt(ownerId) : req.user.userId, // Default to current user
-                status: 'LEAD'
+                status: 'LEAD',
+                courseType,
+                courseName
             }
         });
         res.json(customer);

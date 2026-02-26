@@ -170,6 +170,10 @@ model Customer {
   status        CustomerStatus @default(LEAD)
   lastContactAt DateTime?
   
+  // 课程信息 (新增)
+  courseType    String?
+  courseName    String?
+  
   // 销售日志
   saleLogs      SaleLog[]
   commissions   Commission[] // 佣金关联

@@ -21,6 +21,7 @@ const CustomerList = () => {
   const [actionStage, setActionStage] = useState<SaleStage | null>(null);
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [stageLogs, setStageLogs] = useState<any[]>([]);
+  const [isCustomCourse, setIsCustomCourse] = useState(false);
   
   const navigate = useNavigate();
   const [form] = Form.useForm();
@@ -58,10 +59,19 @@ const CustomerList = () => {
 
   const handleCreate = async (values: any) => {
     try {
-      await api.post('/customers', values);
+      let finalCourseName = values.courseNameSelect;
+      if (values.courseNameSelect === '组合课程') {
+          finalCourseName = values.courseNameInput;
+      }
+
+      await api.post('/customers', {
+          ...values,
+          courseName: finalCourseName
+      });
       message.success('线索创建成功');
       setIsModalOpen(false);
       form.resetFields();
+      setIsCustomCourse(false);
       fetchData();
     } catch (error: any) {
       console.error('Create error:', error);
@@ -235,6 +245,18 @@ const CustomerList = () => {
         title: '销售流程',
         key: 'process',
         render: (_: any, record: Customer) => renderProcess(record)
+    },
+    {
+      title: '课程类型',
+      dataIndex: 'courseType',
+      key: 'courseType',
+      width: 100,
+    },
+    {
+      title: '课程名称',
+      dataIndex: 'courseName',
+      key: 'courseName',
+      width: 150,
     }
   ];
 
@@ -272,6 +294,36 @@ const CustomerList = () => {
                  ))}
              </Select>
           </Form.Item>
+
+          <div style={{ display: 'flex', gap: 16 }}>
+              <Form.Item name="courseType" label="课程类型" style={{ flex: 1 }}>
+                 <Select placeholder="选择类型">
+                     <Select.Option value="CAAC">CAAC</Select.Option>
+                     <Select.Option value="青少年">青少年</Select.Option>
+                 </Select>
+              </Form.Item>
+              
+              <div style={{ flex: 1 }}>
+                  <Form.Item label="课程名称" style={{ marginBottom: 0 }}>
+                     <Form.Item name="courseNameSelect" style={{ marginBottom: isCustomCourse ? 8 : 0 }}>
+                         <Select placeholder="选择课程" onChange={(val) => setIsCustomCourse(val === '组合课程')}>
+                             <Select.Option value="小型视距内">小型视距内</Select.Option>
+                             <Select.Option value="小型超视距">小型超视距</Select.Option>
+                             <Select.Option value="中型视距内">中型视距内</Select.Option>
+                             <Select.Option value="中型超视距">中型超视距</Select.Option>
+                             <Select.Option value="教员">教员</Select.Option>
+                             <Select.Option value="组合课程">组合课程</Select.Option>
+                         </Select>
+                     </Form.Item>
+                     {isCustomCourse && (
+                         <Form.Item name="courseNameInput" rules={[{ required: true, message: '请填写组合课程名称' }]}>
+                             <Input placeholder="填写课程名称" />
+                         </Form.Item>
+                     )}
+                  </Form.Item>
+              </div>
+          </div>
+
           <Form.Item name="ownerId" label="负责人">
              <Select allowClear placeholder="默认为自己">
                  {users.map(u => (
