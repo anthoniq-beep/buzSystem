@@ -45,6 +45,15 @@ app.get('/api/debug', (req, res) => {
     });
 });
 
+// Simple Hello Route (No DB)
+apiRouter.get('/hello', (req, res) => {
+    res.json({ 
+        message: 'Hello from API',
+        cwd: process.cwd(),
+        env: process.env.NODE_ENV
+    });
+});
+
 // DB Connection Test Route
 app.get('/api/db-test', async (req, res) => {
     try {
