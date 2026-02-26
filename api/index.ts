@@ -15,7 +15,9 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const apiRouter = express.Router(); // Define apiRouter early
+
+// Define apiRouter early to avoid TS errors
+const apiRouter = express.Router();
 
 // Middleware
 app.use(cors({
@@ -85,7 +87,7 @@ app.use((req, res, next) => {
 });
 
 // Routes
-const apiRouter = express.Router();
+// apiRouter declaration moved to top
 apiRouter.use('/auth', authRoutes);
 apiRouter.use('/customers', customerRoutes);
 apiRouter.use('/training', trainingRoutes);
