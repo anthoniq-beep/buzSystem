@@ -93,8 +93,8 @@ router.post('/login', async (req, res) => {
       user: userWithoutPassword,
     });
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    console.error('Login error details:', error); // Enhanced logging
+    res.status(500).json({ message: 'Server error during login', error: String(error) });
   }
 });
 

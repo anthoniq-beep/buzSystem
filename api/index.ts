@@ -45,6 +45,29 @@ app.get('/api/debug', (req, res) => {
     });
 });
 
+// DB Connection Test Route
+app.get('/api/db-test', async (req, res) => {
+    try {
+        // Try a simple query
+        const count = await prisma.user.count();
+        res.json({ 
+            status: 'ok', 
+            userCount: count,
+            env: {
+                hasDatabaseUrl: !!process.env.DATABASE_URL,
+                nodeEnv: process.env.NODE_ENV
+            }
+        });
+    } catch (error) {
+        console.error('DB Connection Test Failed:', error);
+        res.status(500).json({ 
+            status: 'error', 
+            message: 'Database connection failed', 
+            error: String(error) 
+        });
+    }
+});
+
 // Logging Middleware
 app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
