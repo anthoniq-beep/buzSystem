@@ -15,6 +15,7 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const apiRouter = express.Router(); // Define apiRouter early
 
 // Middleware
 app.use(cors({
@@ -95,34 +96,17 @@ app.use('/api', apiRouter);
 
 // Handle SPA routing (return index.html for all non-API routes)
 app.get('*', (req, res) => {
-    // If it's an API request that wasn't handled, it will fall through to here if not caught?
-    // Actually, 404 handler is below. But 'app.get(*)' catches everything.
-    // We should ensure API 404s don't return HTML if possible, but for simple SPA, 
-    // usually we place this AFTER api routes.
-    
-    // Check if request accepts html
-    if (req.accepts('html')) {
-        res.sendFile(path.join(frontendDist, 'index.html'));
+    if (req.path.startsWith('/api')) {
+         res.status(404).json({ message: 'API endpoint not found' });
     } else {
-        // If API request (json), pass to next (which is error handler or 404)
-        // But wait, express routing: if I defined app.use('/api', ...), 
-        // requests to /api/... that match nothing inside apiRouter will NOT fall through to here 
-        // if apiRouter has its own 404 handling or if it just ends.
-        // Actually, if apiRouter doesn't handle it, it goes to next middleware.
-        
-        // Let's keep it simple: Only serve index.html for non-api routes.
-        if (req.path.startsWith('/api')) {
-             res.status(404).json({ message: 'API endpoint not found' });
-        } else {
-             res.sendFile(path.join(frontendDist, 'index.html'));
-        }
+         res.sendFile(path.join(frontendDist, 'index.html'));
     }
 });
 
 // Error Handling
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    console.error('Global error handler:', err);
-    res.status(500).json({ message: 'Internal server error', error: err.message });
+app.use((err: any, req: any, res: any, next: any) => {
+    console.error(err.stack);
+    res.status(500).json({ message: 'Internal Server Error' });
 });
 
 // Export for Vercel
