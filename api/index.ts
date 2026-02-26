@@ -1,12 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-// import { PrismaClient } from '@prisma/client';
-// import authRoutes from './routes/auth';
-// import customerRoutes from './routes/customers';
-// import commonRoutes from './routes/common';
-// import trainingRoutes from './routes/training';
-// import prisma from './lib/prisma'; // Use singleton
+import { PrismaClient } from '@prisma/client';
+import authRoutes from './routes/auth';
+import customerRoutes from './routes/customers';
+import commonRoutes from './routes/common';
+import trainingRoutes from './routes/training';
+import prisma from './lib/prisma'; // Use singleton
 
 import path from 'path';
 
@@ -27,16 +27,8 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Serve Static Files (Frontend)
-// Try to serve from './public' (deployment) or '../frontend/dist' (local dev)
-const localFrontendDist = path.join(process.cwd(), '../frontend/dist');
-const deployFrontendDist = path.join(process.cwd(), 'public');
-
-// Check if 'public' exists
-import fs from 'fs';
-const frontendDist = fs.existsSync(deployFrontendDist) ? deployFrontendDist : localFrontendDist;
-
-app.use(express.static(frontendDist));
+// Note: Static file serving is removed for Vercel Serverless Function.
+// Frontend should be deployed as a separate static build.
 
 // Debug Route
 app.get('/api/debug', (req, res) => {
@@ -58,7 +50,6 @@ apiRouter.get('/hello', (req, res) => {
 });
 
 // DB Connection Test Route
-/*
 app.get('/api/db-test', async (req, res) => {
     try {
         // Try a simple query
@@ -80,7 +71,6 @@ app.get('/api/db-test', async (req, res) => {
         });
     }
 });
-*/
 
 // Logging Middleware
 app.use((req, res, next) => {
@@ -90,21 +80,17 @@ app.use((req, res, next) => {
 
 // Routes
 // apiRouter declaration moved to top
-// apiRouter.use('/auth', authRoutes);
-// apiRouter.use('/customers', customerRoutes);
-// apiRouter.use('/training', trainingRoutes);
-// apiRouter.use('/', commonRoutes);
+apiRouter.use('/auth', authRoutes);
+apiRouter.use('/customers', customerRoutes);
+apiRouter.use('/training', trainingRoutes);
+apiRouter.use('/', commonRoutes);
 
 // Mount all routes under /api
 app.use('/api', apiRouter);
 
-// Handle SPA routing (return index.html for all non-API routes)
-app.get('*', (req, res) => {
-    if (req.path.startsWith('/api')) {
-         res.status(404).json({ message: 'API endpoint not found' });
-    } else {
-         res.sendFile(path.join(frontendDist, 'index.html'));
-    }
+// Handle 404 for API routes
+app.use((req, res) => {
+    res.status(404).json({ message: 'API endpoint not found' });
 });
 
 // Error Handling
