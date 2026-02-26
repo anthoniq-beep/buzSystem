@@ -13,8 +13,6 @@
   ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.ts" },
-    { "source": "/assets/(.*)", "destination": "/frontend/assets/$1" },
-    { "source": "/(.*)\\.(png|jpg|jpeg|gif|svg|ico|json|js|css)", "destination": "/frontend/$1.$2" },
-    { "source": "/(.*)", "destination": "/frontend/index.html" }
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
