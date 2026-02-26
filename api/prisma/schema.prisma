@@ -9,7 +9,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  // directUrl = env("DIRECT_URL") // Moved to Env or Config if needed, causing build error in v7
 }
 
 // --------------------------------------------------------
