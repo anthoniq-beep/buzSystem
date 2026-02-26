@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Card, Form, Input, Button, DatePicker, Select, InputNumber, Row, Col, Typography, message, Divider, Space } from 'antd';
+import { Card, Form, Input, Button, DatePicker, Select, InputNumber, Row, Col, Typography, App, Divider, Space } from 'antd';
 import dayjs from 'dayjs';
+import api from '../services/api';
 import { CONTRACT_TEMPLATE } from '../constants/contractTemplate';
 
 const { Title } = Typography;
@@ -46,20 +47,51 @@ function digitUppercase(n: number) {
 }
 
 const ContractPage = () => {
+  const { message, modal } = App.useApp(); // Use App.useApp() hook
   const [form] = Form.useForm();
   const [contractNo, setContractNo] = useState('');
   const [formValues, setFormValues] = useState<any>({});
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
   const [coursePrices, setCoursePrices] = useState<Record<string, number>>({});
+  const [instructors, setInstructors] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
 
   useEffect(() => {
     const dateStr = dayjs().format('YYYYMMDD');
     const randomStr = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
     setContractNo(`${dateStr}${randomStr}`);
+    
+    // Fetch customers for selection
+    fetchCustomers();
   }, []);
+
+  const fetchCustomers = async () => {
+      try {
+          const res = await api.get('/customers');
+          // Only show customers owned by user (or all if admin, but typically sign for own leads)
+          setCustomers(Array.isArray(res.data) ? res.data : []);
+      } catch (e) {
+          console.error('Failed to fetch customers');
+          setCustomers([]);
+      }
+  };
 
   const handleValuesChange = (changedValues: any, allValues: any) => {
       setFormValues(allValues);
+      
+      // Handle Customer Selection
+      if (changedValues.customerId) {
+          const customer = customers.find(c => c.id === changedValues.customerId);
+          if (customer) {
+              form.setFieldsValue({
+                  studentName: customer.name,
+                  phone: customer.phone,
+                  // idCard: customer.idCard // If we had it
+              });
+              // Update formValues manually because setFieldsValue doesn't trigger onValuesChange
+              setFormValues(prev => ({ ...prev, studentName: customer.name, phone: customer.phone }));
+          }
+      }
       
       // Handle Course Selection
       if (changedValues.courseName) {
@@ -152,14 +184,55 @@ const ContractPage = () => {
       return content;
   }, [contractNo, formValues, selectedCourses, coursePrices]);
 
-  const handleFinish = (values: any) => {
+  const handleFinish = async (values: any) => {
+    console.log('Contract Form Values:', values); // Debug Log 1
+
     // Collect prices
     const prices = selectedCourses.map(c => ({
         course: c,
         price: values[`price_${c}`]
     }));
-    console.log('Contract values:', { ...values, prices });
-    message.success('合同生成成功（模拟）');
+    
+    // Calculate total contract amount
+    const totalAmount = prices.reduce((sum, item) => sum + (item.price || 0), 0);
+    console.log('Calculated Total:', totalAmount); // Debug Log 2
+
+    try {
+        // Prepare Payload
+        const payload: any = {
+            name: values.studentName,
+            phone: values.phone,
+            courseType: 'CAAC',
+            courseName: selectedCourses.join(','),
+            contractAmount: totalAmount,
+            status: 'DEAL' // Auto-move to DEAL
+        };
+        console.log('Sending Payload:', payload); // Debug Log 3
+
+        if (values.customerId) {
+             console.log('Updating customer:', values.customerId);
+             // Update existing customer
+             await api.put(`/customers/${values.customerId}`, payload);
+        } else {
+             console.log('Creating new customer');
+             // Create new
+             await api.post('/customers', payload);
+        }
+        
+        console.log('API Success, showing modal'); // Debug Log 4
+
+        // Show Modal instead of simple message
+        modal.success({
+            title: '签约成功',
+            content: '恭喜签约成功！已自动更新客户档案及教培记录。',
+            okText: '知道了',
+        });
+        
+    } catch (error: any) {
+        console.error('Contract sign error:', error);
+        console.error('Error Response:', error.response); // Debug Log 5
+        message.error(error.response?.data?.message || '签约失败，请重试');
+    }
   };
 
   const handlePrint = () => {
@@ -199,11 +272,42 @@ const ContractPage = () => {
           form={form}
           layout="vertical"
           onFinish={handleFinish}
+          onFinishFailed={(errorInfo) => {
+              console.log('Failed:', errorInfo);
+              message.error('请检查表单填写是否完整（如：身份证号、手机号格式等）');
+          }}
           onValuesChange={handleValuesChange}
           initialValues={{
             contractDate: dayjs(),
           }}
         >
+          <Form.Item name="customerId" label="选择客户" rules={[{ required: true }]}>
+             <Select 
+                 showSearch
+                 placeholder="搜索客户姓名"
+                 optionFilterProp="children"
+                 onChange={(val) => {
+                     const customer = customers.find(c => c.id === val);
+                     if (customer) {
+                         form.setFieldsValue({
+                             studentName: customer.name,
+                             phone: customer.phone
+                         });
+                         // Force update formValues state for template rendering
+                         setFormValues((prev: any) => ({ 
+                             ...prev, 
+                             studentName: customer.name, 
+                             phone: customer.phone 
+                         }));
+                     }
+                 }}
+             >
+                 {customers.map(c => (
+                     <Select.Option key={c.id} value={c.id}>{c.name} - {c.phone}</Select.Option>
+                 ))}
+             </Select>
+          </Form.Item>
+
           <Form.Item name="studentName" label="学员姓名" rules={[{ required: true }]}>
             <Input placeholder="请输入姓名" />
           </Form.Item>
@@ -227,13 +331,13 @@ const ContractPage = () => {
           </Form.Item>
           
           {selectedCourses.length > 0 && (
-              <div style={{ background: '#f5f5f5', padding: '12px', borderRadius: '8px', marginBottom: '24px' }}>
-                  <p style={{ marginBottom: '12px', fontWeight: 'bold' }}>合同单价设定：</p>
+              <div style={{ background: '#001529', padding: '12px', borderRadius: '8px', marginBottom: '24px' }}>
+                  <p style={{ marginBottom: '12px', fontWeight: 'bold', color: 'white' }}>合同单价</p>
                   {selectedCourses.map(course => (
                       <Form.Item 
                           key={course} 
                           name={`price_${course}`} 
-                          label={`${course}`} 
+                          label={<span style={{ color: 'white' }}>{`${course} 合同单价`}</span>}
                           rules={[{ required: true }]}
                           initialValue={COURSE_STD_PRICES[course]}
                       >

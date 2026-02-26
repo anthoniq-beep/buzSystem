@@ -21,9 +21,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (token) {
-      // Fetch user profile if token exists but user is null (on refresh)
-      // For now, we rely on local storage or re-login if needed.
-      // Better approach: fetch /auth/me
+      // Fetch user profile to ensure latest data (like department)
+      api.get('/auth/me')
+        .then(res => {
+            setUser(res.data);
+            localStorage.setItem('user', JSON.stringify(res.data));
+        })
+        .catch(() => {
+            // If token invalid, logout
+            logout();
+        });
     }
   }, [token]);
 

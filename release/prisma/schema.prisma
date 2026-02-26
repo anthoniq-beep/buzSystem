@@ -1,0 +1,294 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// --------------------------------------------------------
+// Enums
+// --------------------------------------------------------
+
+enum Role {
+  ADMIN
+  MANAGER
+  SUPERVISOR
+  EMPLOYEE
+  FINANCE
+  HR
+}
+
+enum EmployeeStatus {
+  PROBATION
+  REGULAR
+  TERMINATED
+}
+
+enum CustomerStatus {
+  LEAD     // 线索
+  CHANCE   // 客资
+  CALL     // 约访
+  TOUCH    // 接待
+  PENDING  // 意向
+  DEAL     // 签约
+  CHURNED  // 流失
+}
+
+enum SaleStage {
+  CHANCE
+  CALL
+  TOUCH
+  DEAL
+}
+
+enum ChannelType {
+  ONLINE
+  OFFLINE
+  REFERRAL
+  OTHER
+}
+
+enum ChannelCategory {
+  COMPANY
+  PERSONAL
+}
+
+enum ChannelStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+}
+
+enum CommissionType {
+  CHANCE
+  CALL
+  TOUCH
+  DEAL
+  DEPT
+}
+
+// --------------------------------------------------------
+// Models
+// --------------------------------------------------------
+
+// 组织架构：员工/用户
+model User {
+  id           Int            @id @default(autoincrement())
+  username     String         @unique
+  password     String         // Hashed password
+  name         String
+  role         Role           @default(EMPLOYEE)
+  phone        String?
+  status       EmployeeStatus @default(PROBATION)
+  
+  // 部门关联
+  departmentId Int?
+  department   Department?    @relation(fields: [departmentId], references: [id])
+  
+  // 直属领导关联 (Self-relation)
+  supervisorId Int?
+  supervisor   User?          @relation("UserSupervisor", fields: [supervisorId], references: [id])
+  subordinates User[]         @relation("UserSupervisor")
+
+  // 业务关联
+  customers    Customer[]     // 负责的客户
+  saleLogs     SaleLog[]      // 销售记录
+  salesTargets SalesTarget[]  // 销售目标
+  commissions  Commission[]   // 佣金记录
+  trainings    Training[]     // 负责的培训记录
+  
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@map("users")
+}
+
+// 部门
+model Department {
+  id        Int      @id @default(autoincrement())
+  name      String
+  
+  // 部门层级
+  parentId  Int?
+  parent    Department?   @relation("DepartmentHierarchy", fields: [parentId], references: [id])
+  children  Department[]  @relation("DepartmentHierarchy")
+  
+  users     User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("departments")
+}
+
+// 渠道管理
+model Channel {
+  id        Int           @id @default(autoincrement())
+  name      String
+  type      ChannelType   @default(OTHER)
+  category  ChannelCategory @default(COMPANY) // Default to COMPANY
+  points    Decimal?      @db.Decimal(5, 2) // 渠道点数
+  cost      Decimal?      @db.Decimal(10, 2) // 渠道费用
+  status    ChannelStatus @default(ACTIVE)
+  
+  customers Customer[]
+
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@map("channels")
+}
+
+// 客户管理
+model Customer {
+  id            Int            @id @default(autoincrement())
+  name          String
+  phone         String
+  companyName   String?
+  
+  // 关联信息渠道来源
+  channelId     Int?
+  channel       Channel?       @relation(fields: [channelId], references: [id])
+  
+  // 负责人
+  ownerId       Int
+  owner         User           @relation(fields: [ownerId], references: [id])
+  
+  // 状态与流程
+  status        CustomerStatus @default(LEAD)
+  lastContactAt DateTime?
+  
+  // 课程信息
+  courseType    String?
+  courseName    String?
+  
+  // 培训记录
+  training      Training?
+
+  // 销售日志
+  saleLogs      SaleLog[]// 佣金关联
+  commissions   Commission[] // 佣金关联
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@map("customers")
+}
+
+// --------------------------------------------------------
+// Training Models (教培管理)
+// --------------------------------------------------------
+
+model Training {
+  id          Int      @id @default(autoincrement())
+  
+  customerId  Int      @unique
+  customer    Customer @relation(fields: [customerId], references: [id])
+  
+  // 负责人 (教培部 Manager/Supervisor/Employee)
+  assigneeId  Int?
+  assignee    User?    @relation(fields: [assigneeId], references: [id])
+  
+  status      String   @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
+  
+  logs        TrainingLog[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("trainings")
+}
+
+model TrainingLog {
+  id          Int      @id @default(autoincrement())
+  
+  trainingId  Int
+  training    Training @relation(fields: [trainingId], references: [id])
+  
+  stage       String   // THEORY, SIMULATION, PRACTICAL, GROUND, RETURN, REPLAN
+  
+  // Specific Data
+  score       Int?     // For Theory (80/90 pass logic handled in app)
+  result      String?  // PASS/FAIL, COMPLETE/INCOMPLETE
+  content     String?  // JSON or text for forms (e.g. Flight Record content)
+  
+  // Approval Workflow
+  status      String   @default("SUBMITTED") // SUBMITTED, APPROVED
+  approvedBy  Int?     // User ID of approver (Manager)
+  approvedAt  DateTime?
+  
+  submittedAt DateTime @default(now())
+  
+  @@map("training_logs")
+}
+
+// 销售日志/跟进记录
+model SaleLog {
+  id          Int       @id @default(autoincrement())
+  
+  customerId  Int
+  customer    Customer  @relation(fields: [customerId], references: [id])
+  
+  actorId     Int
+  actor       User      @relation(fields: [actorId], references: [id])
+  
+  stage       SaleStage
+  note        String?
+  dealAmount  Decimal?  @db.Decimal(12, 2) // 成交金额 (仅DEAL阶段)
+  isEffective Boolean   @default(true)
+  occurredAt  DateTime  @default(now())
+
+  @@map("sale_logs")
+}
+
+// 销售目标
+model SalesTarget {
+  id        Int      @id @default(autoincrement())
+  
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  
+  month     String   // Format: YYYY-MM
+  amount    Decimal  @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, month])
+  @@map("sales_targets")
+}
+
+// 佣金记录
+model Commission {
+  id            Int              @id @default(autoincrement())
+  
+  userId        Int
+  user          User             @relation(fields: [userId], references: [id])
+  
+  customerId    Int
+  customer      Customer         @relation(fields: [customerId], references: [id])
+  
+  amount        Decimal          @db.Decimal(12, 2) // 签约金额
+  commission    Decimal?         @db.Decimal(12, 2) // 佣金金额
+  
+  status        CommissionStatus @default(PENDING)
+  type          CommissionType   @default(DEAL)
+  
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@map("commissions")
+}

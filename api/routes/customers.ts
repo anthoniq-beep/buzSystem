@@ -70,7 +70,7 @@ router.get('/:id', authenticate, async (req, res) => {
 
 // Create customer
 router.post('/', authenticate, async (req: any, res) => {
-    const { name, phone, sourceId, ownerId, companyName } = req.body;
+    const { name, phone, sourceId, ownerId, companyName, courseType, courseName } = req.body;
     console.log(`User ${req.user?.userId} creating customer:`, req.body); // Debug log
 
     try {
@@ -79,9 +79,17 @@ router.post('/', authenticate, async (req: any, res) => {
                 name,
                 phone,
                 companyName,
+                courseType,
+                courseName,
                 channelId: sourceId ? parseInt(sourceId) : null,
                 ownerId: ownerId ? parseInt(ownerId) : req.user.userId, // Default to current user
-                status: 'LEAD'
+                status: 'LEAD',
+                // Auto-create Training Record
+                training: {
+                    create: {
+                        status: 'PENDING'
+                    }
+                }
             }
         });
         res.json(customer);
@@ -253,13 +261,172 @@ router.post('/:id/log', authenticate, async (req: any, res) => {
 });
 
 // Update customer
-router.put('/:id', authenticate, async (req, res) => {
+router.put('/:id', authenticate, async (req: any, res) => {
     const { id } = req.params;
+    const { status, contractAmount, ...updateData } = req.body; 
+    
     try {
         const customer = await prisma.customer.update({
             where: { id: parseInt(id) },
-            data: req.body
+            data: {
+                ...updateData,
+                status // Ensure status is updated
+            }
         });
+
+        // If status changed to DEAL, ensure training record exists
+        if (status === 'DEAL') {
+             // ... logic using contractAmount ...
+             const { courseName } = req.body;
+             
+             if (contractAmount) {
+                await prisma.saleLog.create({
+                    data: {
+                        customerId: parseInt(id),
+                        actorId: req.user.userId,
+                        stage: 'DEAL',
+                        note: `合同签约完成。课程：${courseName}`,
+                        isEffective: true,
+                        dealAmount: Number(contractAmount),
+                        occurredAt: new Date()
+                    }
+                });
+             }
+             
+             // 1.5 Calculate Commission
+             if (contractAmount) {
+                const amount = Number(contractAmount);
+                const customerId = parseInt(id);
+                
+                // Fetch customer with channel and history
+                const customer = await prisma.customer.findUnique({
+                    where: { id: customerId },
+                    include: { channel: true, saleLogs: { orderBy: { occurredAt: 'desc' } } }
+                });
+                
+                if (customer) {
+                    const pointsRaw = Number(customer.channel?.points || 0);
+                    const pointsRate = pointsRaw > 1 ? pointsRaw / 100 : pointsRaw;
+                    const netAmount = amount * (1 - pointsRate);
+                    const logs = customer.saleLogs;
+                    const commissionData: any[] = [];
+                    
+                    // Identify Actors
+                    const chanceLog = logs.find((l: any) => l.stage === 'CHANCE');
+                    const callLog = logs.find((l: any) => l.stage === 'CALL');
+                    const touchLog = logs.find((l: any) => l.stage === 'TOUCH');
+                    const dealActorId = req.user.userId;
+                    
+                    const actorIds = new Set<number>();
+                    if (chanceLog) actorIds.add(chanceLog.actorId);
+                    if (callLog) actorIds.add(callLog.actorId);
+                    if (touchLog) actorIds.add(touchLog.actorId);
+                    actorIds.add(dealActorId);
+                    
+                    // Fetch all actors
+                    const actors = await prisma.user.findMany({
+                        where: { id: { in: Array.from(actorIds) } },
+                        include: { department: true }
+                    });
+                    const actorsMap = new Map(actors.map(u => [u.id, u]));
+                    
+                    // Fetch managers of involved departments -> CHANGED TO VIRTUAL USERS (Dept Name)
+                    const deptIds = new Set<number>();
+                    actors.forEach(u => { if(u.departmentId) deptIds.add(u.departmentId); });
+                    
+                    let deptVirtualUsers = new Map<number, number>();
+                    if (deptIds.size > 0) {
+                        // 1. Get Dept Names
+                        const depts = await prisma.department.findMany({
+                            where: { id: { in: Array.from(deptIds) } }
+                        });
+                        const deptNames = depts.map(d => d.name);
+                        
+                        // 2. Find Users with Dept Names
+                        const virtualUsers = await prisma.user.findMany({
+                            where: { name: { in: deptNames } }
+                        });
+                        
+                        // 3. Map DeptID -> VirtualUserID
+                        depts.forEach(d => {
+                            const vUser = virtualUsers.find(u => u.name === d.name);
+                            if (vUser) {
+                                deptVirtualUsers.set(d.id, vUser.id);
+                            }
+                        });
+                    }
+
+                    // 3.1 CHANCE Commission
+                    if (chanceLog) {
+                        const category = customer.channel?.category || 'COMPANY';
+                        if (category === 'COMPANY') {
+                            commissionData.push({ userId: chanceLog.actorId, customerId, amount, commission: netAmount * 0.01, status: 'PENDING', type: 'CHANCE' });
+                            const actor = actorsMap.get(chanceLog.actorId);
+                            if (actor?.departmentId) {
+                                const vUserId = deptVirtualUsers.get(actor.departmentId);
+                                if (vUserId) commissionData.push({ userId: vUserId, customerId, amount, commission: netAmount * 0.02, status: 'PENDING', type: 'DEPT' });
+                            }
+                        } else {
+                            commissionData.push({ userId: chanceLog.actorId, customerId, amount, commission: netAmount * 0.03, status: 'PENDING', type: 'CHANCE' });
+                        }
+                    }
+
+                    // 3.2 CALL Commission (2%)
+                    if (callLog) {
+                        commissionData.push({ userId: callLog.actorId, customerId, amount, commission: netAmount * 0.02, status: 'PENDING', type: 'CALL' });
+                    }
+
+                    // 3.3 TOUCH Commission (2%)
+                    if (touchLog) {
+                        commissionData.push({ userId: touchLog.actorId, customerId, amount, commission: netAmount * 0.02, status: 'PENDING', type: 'TOUCH' });
+                    }
+
+                    // 3.4 DEAL Commission
+                    const dealActor = actorsMap.get(dealActorId);
+                    if (dealActor) {
+                        let userRate = 0.01;
+                        let deptRate = 0.02;
+                        if (dealActor.role === 'MANAGER') { userRate = 0.03; deptRate = 0; }
+                        else if (dealActor.role === 'SUPERVISOR') { userRate = 0.02; deptRate = 0.01; }
+                        
+                        commissionData.push({ userId: dealActor.id, customerId, amount, commission: netAmount * userRate, status: 'PENDING', type: 'DEAL' });
+                        
+                        if (deptRate > 0 && dealActor.departmentId) {
+                            const vUserId = deptVirtualUsers.get(dealActor.departmentId);
+                            if (vUserId) commissionData.push({ userId: vUserId, customerId, amount, commission: netAmount * deptRate, status: 'PENDING', type: 'DEPT' });
+                        }
+                    }
+
+                    // Batch Insert
+                    if (commissionData.length > 0) {
+                        await prisma.commission.createMany({
+                            data: commissionData
+                        });
+                    }
+                }
+             }
+             
+             // ... rest of logic ...
+            const existingTraining = await prisma.training.findUnique({
+                where: { customerId: parseInt(id) }
+            });
+            
+            if (!existingTraining) {
+                await prisma.training.create({
+                    data: {
+                        customerId: parseInt(id),
+                        status: 'PENDING'
+                    }
+                });
+            } else {
+                 // Update training if needed (e.g. if contract resigned/updated)
+                 await prisma.training.update({
+                     where: { id: existingTraining.id },
+                     data: { status: 'PENDING' } // Reset or keep? Maybe just ensure it exists.
+                 });
+            }
+        }
+
         res.json(customer);
     } catch (error) {
         console.error('Error updating customer:', error);

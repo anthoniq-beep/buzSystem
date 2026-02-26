@@ -108,6 +108,7 @@ model User {
   saleLogs     SaleLog[]      // 销售记录
   salesTargets SalesTarget[]  // 销售目标
   commissions  Commission[]   // 佣金记录
+  trainings    Training[]     // 负责的培训记录
   
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
@@ -170,18 +171,68 @@ model Customer {
   status        CustomerStatus @default(LEAD)
   lastContactAt DateTime?
   
-  // 课程信息 (暂时注释，因数据库报错)
-  // courseType    String?
-  // courseName    String?
+  // 课程信息
+  courseType    String?
+  courseName    String?
   
+  // 培训记录
+  training      Training?
+
   // 销售日志
-  saleLogs      SaleLog[]
+  saleLogs      SaleLog[]// 佣金关联
   commissions   Commission[] // 佣金关联
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
   @@map("customers")
+}
+
+// --------------------------------------------------------
+// Training Models (教培管理)
+// --------------------------------------------------------
+
+model Training {
+  id          Int      @id @default(autoincrement())
+  
+  customerId  Int      @unique
+  customer    Customer @relation(fields: [customerId], references: [id])
+  
+  // 负责人 (教培部 Manager/Supervisor/Employee)
+  assigneeId  Int?
+  assignee    User?    @relation(fields: [assigneeId], references: [id])
+  
+  status      String   @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
+  
+  logs        TrainingLog[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("trainings")
+}
+
+model TrainingLog {
+  id          Int      @id @default(autoincrement())
+  
+  trainingId  Int
+  training    Training @relation(fields: [trainingId], references: [id])
+  
+  stage       String   // THEORY, SIMULATION, PRACTICAL, GROUND, RETURN, REPLAN
+  
+  // Specific Data
+  score       Int?     // For Theory (80/90 pass logic handled in app)
+  result      String?  // PASS/FAIL, COMPLETE/INCOMPLETE
+  content     String?  // JSON or text for forms (e.g. Flight Record content)
+  
+  // Approval Workflow
+  status      String   @default("SUBMITTED") // SUBMITTED, APPROVED
+  approvedBy  Int?     // User ID of approver (Manager)
+  approvedAt  DateTime?
+  
+  submittedAt DateTime @default(now())
+  
+  @@map("training_logs")
 }
 
 // 销售日志/跟进记录

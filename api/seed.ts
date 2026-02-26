@@ -13,11 +13,46 @@ async function main() {
   // await prisma.user.deleteMany();
   // await prisma.department.deleteMany();
 
-  // 2. Create Departments
-  const salesDept = await prisma.department.create({
-    data: { name: '销售部' }
+  // 2. Create/Find Departments
+  let salesDept = await prisma.department.findFirst({ 
+      where: { 
+          name: { in: ['销售部', '市场营销部'] } 
+      } 
   });
-  console.log('Created Department: 销售部');
+  
+  if (!salesDept) {
+    try {
+        salesDept = await prisma.department.create({
+            data: { name: '销售部' }
+        });
+        console.log('Created Department: 销售部');
+    } catch (e) {
+        console.log('Failed to create sales dept, might exist or ID conflict');
+        // Fallback to fetching any department or handle error
+        salesDept = await prisma.department.findFirst();
+    }
+  } else {
+    console.log(`Department ${salesDept.name} already exists`);
+  }
+
+  let trainingDept = await prisma.department.findFirst({ where: { name: '教培部' } });
+  if (!trainingDept) {
+    try {
+        trainingDept = await prisma.department.create({
+            data: { name: '教培部' }
+        });
+        console.log('Created Department: 教培部');
+    } catch (e) {
+        console.log('Failed to create training dept');
+    }
+  } else {
+    console.log('Department 教培部 already exists');
+  }
+
+  if (!salesDept || !trainingDept) {
+      console.error('Required departments not found or created. Exiting.');
+      return;
+  }
 
   // 3. Create Users
   // Admin (already exists from previous step, skipping or handling error)
@@ -69,40 +104,67 @@ async function main() {
   });
   console.log('Upserted Sales:', sales1.username);
 
-  // 4. Create Channels
-  const onlineChannel = await prisma.channel.create({
-    data: {
-      name: '线上广告',
-      type: ChannelType.ONLINE,
-      status: ChannelStatus.ACTIVE,
-    }
+  // Training Instructor
+  const instructor1 = await prisma.user.upsert({
+    where: { username: 'instructor1' },
+    update: {},
+    create: {
+      username: 'instructor1',
+      password: 'password',
+      name: '教员A',
+      role: Role.EMPLOYEE,
+      status: EmployeeStatus.REGULAR,
+      departmentId: trainingDept.id,
+    },
   });
-  console.log('Created Channel:', onlineChannel.name);
+  console.log('Upserted Instructor:', instructor1.username);
+
+  // 4. Create Channels
+  let onlineChannel = await prisma.channel.findFirst({ where: { name: '线上广告' } });
+  if (!onlineChannel) {
+    onlineChannel = await prisma.channel.create({
+      data: {
+        name: '线上广告',
+        type: ChannelType.ONLINE,
+        status: ChannelStatus.ACTIVE,
+      }
+    });
+    console.log('Created Channel: 线上广告');
+  } else {
+    console.log('Channel 线上广告 already exists');
+  }
 
   // 5. Create Customers
-  const customer1 = await prisma.customer.create({
-    data: {
-      name: '张三科技',
-      phone: '13800138000',
-      companyName: '张三科技有限公司',
-      status: CustomerStatus.LEAD,
-      channelId: onlineChannel.id,
-      ownerId: sales1.id, // Assigned to sales1
-    }
-  });
-  console.log('Created Customer:', customer1.name);
+  // Only create if not exists (check by phone)
+  const existingCustomer1 = await prisma.customer.findFirst({ where: { phone: '13800138000' } });
+  if (!existingCustomer1) {
+      const customer1 = await prisma.customer.create({
+        data: {
+          name: '张三科技',
+          phone: '13800138000',
+          companyName: '张三科技有限公司',
+          status: CustomerStatus.LEAD,
+          channelId: onlineChannel.id,
+          ownerId: sales1.id, // Assigned to sales1
+        }
+      });
+      console.log('Created Customer:', customer1.name);
+  }
 
-  const customer2 = await prisma.customer.create({
-    data: {
-      name: '李四贸易',
-      phone: '13900139000',
-      companyName: '李四贸易有限公司',
-      status: CustomerStatus.CHANCE,
-      channelId: onlineChannel.id,
-      ownerId: manager.id, // Assigned to manager
-    }
-  });
-  console.log('Created Customer:', customer2.name);
+  const existingCustomer2 = await prisma.customer.findFirst({ where: { phone: '13900139000' } });
+  if (!existingCustomer2) {
+      const customer2 = await prisma.customer.create({
+        data: {
+          name: '李四贸易',
+          phone: '13900139000',
+          companyName: '李四贸易有限公司',
+          status: CustomerStatus.CHANCE,
+          channelId: onlineChannel.id,
+          ownerId: manager.id, // Assigned to manager
+        }
+      });
+      console.log('Created Customer:', customer2.name);
+  }
 
   console.log('Seeding finished.');
 }

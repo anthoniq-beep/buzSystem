@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout, Menu, Avatar, Dropdown, Space, Typography, theme, Modal, Form, Input, App } from 'antd';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -16,6 +16,7 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   FileTextOutlined,
+  RocketOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 import { Role } from '../types';
@@ -33,6 +34,13 @@ const MainLayout = () => {
   const { message } = App.useApp();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [passwordForm] = Form.useForm();
+
+  useEffect(() => {
+    // Redirect Training Dept users from dashboard/root to training page
+    if (user?.department?.name === '教培部' && (location.pathname === '/' || location.pathname === '/dashboard')) {
+        navigate('/training');
+    }
+  }, [user, location.pathname, navigate]);
 
   const handleLogout = () => {
     logout();
@@ -73,7 +81,20 @@ const MainLayout = () => {
     ],
   };
 
-  const menuItems = [
+  const isTrainingDept = user?.department?.name === '教培部';
+
+  const menuItems = isTrainingDept ? [
+    {
+      key: '/training',
+      icon: <RocketOutlined />,
+      label: '教培管理',
+    },
+    {
+      key: '/admin/settings',
+      icon: <SettingOutlined />,
+      label: '系统设置',
+    }
+  ] : [
     {
       key: '/dashboard',
       icon: <DashboardOutlined />,
@@ -93,6 +114,11 @@ const MainLayout = () => {
       key: '/contract',
       icon: <FileTextOutlined />,
       label: '合同签约',
+    },
+    {
+      key: '/training',
+      icon: <RocketOutlined />,
+      label: '教培管理',
     },
     // Admin routes
     ...(user?.role === Role.ADMIN || user?.role === Role.MANAGER || user?.role === Role.SUPERVISOR ? [{

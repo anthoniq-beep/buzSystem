@@ -5,7 +5,10 @@ import { PrismaClient } from '@prisma/client';
 import authRoutes from './routes/auth';
 import customerRoutes from './routes/customers';
 import commonRoutes from './routes/common';
+import trainingRoutes from './routes/training';
 import prisma from './lib/prisma'; // Use singleton
+
+import path from 'path';
 
 // Load environment variables
 dotenv.config();
@@ -16,10 +19,21 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors({
     origin: '*', // Allow all origins for now (for debugging)
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
+
+// Serve Static Files (Frontend)
+// Try to serve from './public' (deployment) or '../frontend/dist' (local dev)
+const localFrontendDist = path.join(process.cwd(), '../frontend/dist');
+const deployFrontendDist = path.join(process.cwd(), 'public');
+
+// Check if 'public' exists
+import fs from 'fs';
+const frontendDist = fs.existsSync(deployFrontendDist) ? deployFrontendDist : localFrontendDist;
+
+app.use(express.static(frontendDist));
 
 // Debug Route
 app.get('/api/debug', (req, res) => {
@@ -41,14 +55,37 @@ app.use((req, res, next) => {
 const apiRouter = express.Router();
 apiRouter.use('/auth', authRoutes);
 apiRouter.use('/customers', customerRoutes);
+apiRouter.use('/training', trainingRoutes);
 apiRouter.use('/', commonRoutes);
 
 // Mount all routes under /api
 app.use('/api', apiRouter);
 
-// Also mount under root for local dev convenience if accessing directly without /api prefix
-// (Optional, but helps if local dev proxy strips /api)
-// app.use('/', apiRouter);
+// Handle SPA routing (return index.html for all non-API routes)
+app.get('*', (req, res) => {
+    // If it's an API request that wasn't handled, it will fall through to here if not caught?
+    // Actually, 404 handler is below. But 'app.get(*)' catches everything.
+    // We should ensure API 404s don't return HTML if possible, but for simple SPA, 
+    // usually we place this AFTER api routes.
+    
+    // Check if request accepts html
+    if (req.accepts('html')) {
+        res.sendFile(path.join(frontendDist, 'index.html'));
+    } else {
+        // If API request (json), pass to next (which is error handler or 404)
+        // But wait, express routing: if I defined app.use('/api', ...), 
+        // requests to /api/... that match nothing inside apiRouter will NOT fall through to here 
+        // if apiRouter has its own 404 handling or if it just ends.
+        // Actually, if apiRouter doesn't handle it, it goes to next middleware.
+        
+        // Let's keep it simple: Only serve index.html for non-api routes.
+        if (req.path.startsWith('/api')) {
+             res.status(404).json({ message: 'API endpoint not found' });
+        } else {
+             res.sendFile(path.join(frontendDist, 'index.html'));
+        }
+    }
+});
 
 // Error Handling
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

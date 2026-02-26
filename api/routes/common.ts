@@ -514,12 +514,13 @@ router.put('/commission/:id', authenticate, async (req: any, res) => {
     const { id } = req.params;
     const { commission, status } = req.body;
     try {
+        const updateData: any = {};
+        if (commission !== undefined) updateData.commission = Number(commission);
+        if (status !== undefined) updateData.status = status;
+
         const updated = await prisma.commission.update({
             where: { id: Number(id) },
-            data: {
-                commission: commission ? Number(commission) : undefined,
-                status: status || undefined
-            }
+            data: updateData
         });
         res.json(updated);
     } catch (error) {

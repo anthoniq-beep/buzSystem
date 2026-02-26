@@ -113,6 +113,7 @@ router.get('/me', async (req, res) => {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
+      include: { department: true } // Include department info
     });
 
     if (!user) {
