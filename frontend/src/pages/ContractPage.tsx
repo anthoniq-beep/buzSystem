@@ -5,6 +5,14 @@ import { CONTRACT_TEMPLATE } from '../constants/contractTemplate';
 
 const { Title } = Typography;
 
+const COURSE_STD_PRICES: Record<string, number> = {
+  '小型视距内': 7000,
+  '小型超视距': 9000,
+  '中型视距内': 8000,
+  '中型超视距': 12000,
+  '教员': 19500
+};
+
 function digitUppercase(n: number) {
     if (n === undefined || n === null) return '';
     const fraction = ['角', '分'];
@@ -41,6 +49,8 @@ const ContractPage = () => {
   const [form] = Form.useForm();
   const [contractNo, setContractNo] = useState('');
   const [formValues, setFormValues] = useState<any>({});
+  const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
+  const [coursePrices, setCoursePrices] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const dateStr = dayjs().format('YYYYMMDD');
@@ -48,8 +58,38 @@ const ContractPage = () => {
     setContractNo(`${dateStr}${randomStr}`);
   }, []);
 
-  const handleValuesChange = (_: any, allValues: any) => {
+  const handleValuesChange = (changedValues: any, allValues: any) => {
       setFormValues(allValues);
+      
+      // Handle Course Selection
+      if (changedValues.courseName) {
+          const courses = changedValues.courseName;
+          setSelectedCourses(courses);
+          
+          // Init prices for new courses if not set
+          const newPrices = { ...coursePrices };
+          courses.forEach((c: string) => {
+              if (newPrices[c] === undefined) {
+                  newPrices[c] = COURSE_STD_PRICES[c] || 0;
+              }
+          });
+          setCoursePrices(newPrices);
+          
+          // Update form fields for prices
+          const fields = courses.reduce((acc: any, c: string) => {
+              acc[`price_${c}`] = newPrices[c];
+              return acc;
+          }, {});
+          form.setFieldsValue(fields);
+      }
+      
+      // Handle Price Change
+      Object.keys(changedValues).forEach(key => {
+          if (key.startsWith('price_')) {
+              const course = key.replace('price_', '');
+              setCoursePrices(prev => ({ ...prev, [course]: changedValues[key] }));
+          }
+      });
   };
 
   const contractContent = useMemo(() => {
@@ -69,21 +109,56 @@ const ContractPage = () => {
       content = content.replace(/\[today\]/g, wrapBlue(today));
       content = content.replace(/\[end_date\]/g, wrapBlue(endDate));
       
-      content = content.replace(/\[课程名称\]/g, formValues.courseName ? wrapBlue(formValues.courseName) : placeholder('(课程名称)'));
+      // Generate Course Rows
+      let courseRows = '';
+      let totalPrice = 0;
       
-      const price = formValues.courseAmount ? wrapBlue(`¥${formValues.courseAmount}`) : placeholder('(金额)');
-      // Global replace for price (multiple occurrences)
-      content = content.split('[课程价格]').join(price);
-      content = content.split('[合同单价]').join(price);
+      if (selectedCourses.length > 0) {
+          content = content.replace(/\[课程名称\]/g, wrapBlue(selectedCourses.join('、'))); // For text description
+          
+          selectedCourses.forEach(course => {
+              const stdPrice = COURSE_STD_PRICES[course] || 0;
+              const actualPrice = coursePrices[course] || stdPrice;
+              totalPrice += actualPrice;
+              
+              courseRows += `
+              <tr>
+                <td>${wrapBlue(course)}</td>
+                <td>${wrapBlue(`¥${stdPrice}`)}</td>
+                <td>${wrapBlue(`¥${actualPrice}`)}</td>
+                <td>0</td>
+                <td>${wrapBlue(`¥${actualPrice}`)}</td>
+                <td></td>
+              </tr>`;
+          });
+      } else {
+          content = content.replace(/\[课程名称\]/g, placeholder('(课程名称)'));
+          courseRows = `
+              <tr>
+                <td>${placeholder('(课程名称)')}</td>
+                <td>${placeholder('(课程单价)')}</td>
+                <td>${placeholder('(合同单价)')}</td>
+                <td>0</td>
+                <td>${placeholder('(金额)')}</td>
+                <td></td>
+              </tr>`;
+      }
       
-      const priceUpper = formValues.courseAmount ? wrapBlue(digitUppercase(formValues.courseAmount)) : '________________';
-      content = content.replace(/\[合同单价大写\]/g, priceUpper);
+      content = content.replace('[课程列表行]', courseRows);
+      
+      content = content.replace(/\[总金额\]/g, wrapBlue(`¥${totalPrice}`));
+      content = content.replace(/\[总金额大写\]/g, wrapBlue(digitUppercase(totalPrice)));
       
       return content;
-  }, [contractNo, formValues]);
+  }, [contractNo, formValues, selectedCourses, coursePrices]);
 
   const handleFinish = (values: any) => {
-    console.log('Contract values:', values);
+    // Collect prices
+    const prices = selectedCourses.map(c => ({
+        course: c,
+        price: values[`price_${c}`]
+    }));
+    console.log('Contract values:', { ...values, prices });
     message.success('合同生成成功（模拟）');
   };
 
@@ -142,20 +217,36 @@ const ContractPage = () => {
           <Divider />
           
           <Form.Item name="courseName" label="课程名称" rules={[{ required: true }]}>
-            <Select placeholder="请选择课程">
-              <Select.Option value="民用无人驾驶航空器操控员执照培训">民用无人驾驶航空器操控员执照培训</Select.Option>
-              <Select.Option value="行业应用培训">行业应用培训</Select.Option>
-              <Select.Option value="青少年无人机科普">青少年无人机科普</Select.Option>
+            <Select mode="multiple" placeholder="请选择课程">
+              <Select.Option value="小型视距内">小型视距内</Select.Option>
+              <Select.Option value="小型超视距">小型超视距</Select.Option>
+              <Select.Option value="中型视距内">中型视距内</Select.Option>
+              <Select.Option value="中型超视距">中型超视距</Select.Option>
+              <Select.Option value="教员">教员</Select.Option>
             </Select>
           </Form.Item>
-          <Form.Item name="courseAmount" label="课程金额" rules={[{ required: true }]}>
-            <InputNumber 
-              style={{ width: '100%' }} 
-              prefix="¥" 
-              formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-              parser={value => value!.replace(/\$\s?|(,*)/g, '')}
-            />
-          </Form.Item>
+          
+          {selectedCourses.length > 0 && (
+              <div style={{ background: '#f5f5f5', padding: '12px', borderRadius: '8px', marginBottom: '24px' }}>
+                  <p style={{ marginBottom: '12px', fontWeight: 'bold' }}>合同单价设定：</p>
+                  {selectedCourses.map(course => (
+                      <Form.Item 
+                          key={course} 
+                          name={`price_${course}`} 
+                          label={`${course}`} 
+                          rules={[{ required: true }]}
+                          initialValue={COURSE_STD_PRICES[course]}
+                      >
+                        <InputNumber 
+                          style={{ width: '100%' }} 
+                          prefix="¥" 
+                          formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                          parser={value => value!.replace(/\$\s?|(,*)/g, '')}
+                        />
+                      </Form.Item>
+                  ))}
+              </div>
+          )}
 
           <Form.Item style={{ marginTop: 24 }}>
             <Space style={{ width: '100%' }} direction="vertical">

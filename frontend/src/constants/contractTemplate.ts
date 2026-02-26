@@ -40,18 +40,11 @@ export const CONTRACT_TEMPLATE = `
     <th>金额</th>
     <th>备注</th>
   </tr>
-  <tr>
-    <td>[课程名称]</td>
-    <td>[课程价格]</td>
-    <td>[合同单价]</td>
-    <td>0</td>
-    <td>[合同单价]</td>
-    <td></td>
-  </tr>
+  [课程列表行]
 </table>
 
 <h3 style="font-size: 16px; font-weight: bold; margin: 16px 0;">三、支付方式</h3>
-<p style="line-height: 1.8;">1. 培训费用总金额：人民币<strong>[合同单价]</strong>元 （大写：<strong>[合同单价大写]</strong>）。</p>
+<p style="line-height: 1.8;">1. 培训费用总金额：人民币<strong>[总金额]</strong>元 （大写：<strong>[总金额大写]</strong>）。</p>
 <p style="line-height: 1.8;">2. 费用支付方式为：本合同签订之日起3个工作日内，甲方向乙方支付合同全部款项。</p>
 <p style="line-height: 1.8;">支付方式：□对公转账 □扫码支付 □小程序支付 □现金</p>
 <p style="line-height: 1.8;">乙方银行账户名称：上海空域领航航空科技有限公司</p>
