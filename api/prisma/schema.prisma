@@ -156,7 +156,7 @@ model Customer {
   id            Int            @id @default(autoincrement())
   name          String
   phone         String
-  // companyName   String? // Temporarily removed as database reports missing column
+  companyName   String?
   
   // 关联信息渠道来源
   channelId     Int?
@@ -170,9 +170,9 @@ model Customer {
   status        CustomerStatus @default(LEAD)
   lastContactAt DateTime?
   
-  // 课程信息 (新增)
-  courseType    String?
-  courseName    String?
+  // 课程信息 (暂时注释，因数据库报错)
+  // courseType    String?
+  // courseName    String?
   
   // 销售日志
   saleLogs      SaleLog[]
