@@ -156,9 +156,9 @@ model Customer {
   id            Int            @id @default(autoincrement())
   name          String
   phone         String
-  companyName   String?
+  // companyName   String? // Temporarily removed as database reports missing column
   
-  // 渠道来源
+  // 关联信息渠道来源
   channelId     Int?
   channel       Channel?       @relation(fields: [channelId], references: [id])
   
