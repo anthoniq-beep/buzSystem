@@ -1,12 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
-import authRoutes from './routes/auth';
-import customerRoutes from './routes/customers';
-import commonRoutes from './routes/common';
-import trainingRoutes from './routes/training';
-import prisma from './lib/prisma'; // Use singleton
+// import { PrismaClient } from '@prisma/client';
+// import authRoutes from './routes/auth';
+// import customerRoutes from './routes/customers';
+// import commonRoutes from './routes/common';
+// import trainingRoutes from './routes/training';
+// import prisma from './lib/prisma'; // Use singleton
 
 import path from 'path';
 
@@ -58,6 +58,7 @@ apiRouter.get('/hello', (req, res) => {
 });
 
 // DB Connection Test Route
+/*
 app.get('/api/db-test', async (req, res) => {
     try {
         // Try a simple query
@@ -79,6 +80,7 @@ app.get('/api/db-test', async (req, res) => {
         });
     }
 });
+*/
 
 // Logging Middleware
 app.use((req, res, next) => {
@@ -88,10 +90,10 @@ app.use((req, res, next) => {
 
 // Routes
 // apiRouter declaration moved to top
-apiRouter.use('/auth', authRoutes);
-apiRouter.use('/customers', customerRoutes);
-apiRouter.use('/training', trainingRoutes);
-apiRouter.use('/', commonRoutes);
+// apiRouter.use('/auth', authRoutes);
+// apiRouter.use('/customers', customerRoutes);
+// apiRouter.use('/training', trainingRoutes);
+// apiRouter.use('/', commonRoutes);
 
 // Mount all routes under /api
 app.use('/api', apiRouter);
