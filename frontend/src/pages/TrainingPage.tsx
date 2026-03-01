@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Table, Card, Tag, Button, Modal, Form, Select, Steps, Tabs, InputNumber, Radio, Input, message, App, Space, Popconfirm } from 'antd';
+import { Table, Card, Tag, Button, Modal, Form, Select, Steps, Tabs, InputNumber, Radio, Input, message, App, Space, Popconfirm, DatePicker, Row, Col, Divider } from 'antd';
 import { RocketOutlined, UserOutlined, CheckCircleOutlined, ClockCircleOutlined, FileTextOutlined } from '@ant-design/icons';
 import api from '../services/api';
 import dayjs from 'dayjs';
@@ -8,6 +8,7 @@ import { Role } from '../types';
 
 const { Step } = Steps;
 const { TextArea } = Input;
+const { Option } = Select;
 
 // Stages
 const STAGES = {
@@ -102,10 +103,20 @@ const TrainingPage = () => {
                     return; // Prevent submission? User said "need X score to submit", implying validation block.
                 }
             }
+            
+            // Format content if it's an object (PRACTICAL stage)
+            let formattedValues = { ...values };
+            if (currentStage === 'PRACTICAL' && values.content && typeof values.content === 'object') {
+                 // Ensure date is formatted if moment/dayjs object
+                 if (values.content.baseInfo?.date) {
+                     values.content.baseInfo.date = dayjs(values.content.baseInfo.date).format('YYYY-MM-DD');
+                 }
+                 formattedValues.content = JSON.stringify(values.content);
+            }
 
             await api.post(`/training/${selectedTraining.id}/log`, {
                 stage: currentStage,
-                ...values
+                ...formattedValues
             });
             message.success('提交成功，等待审批');
             setIsLogModalOpen(false);
@@ -268,22 +279,120 @@ const TrainingPage = () => {
         }
         if (currentStage === 'PRACTICAL') {
             return (
-                <>
-                    <div style={{ marginBottom: 16, background: '#f5f5f5', padding: 12, borderRadius: 8 }}>
-                        <p>请参考文档填写飞行安全记录表：</p>
-                        <a href="#" onClick={(e) => { e.preventDefault(); /* Maybe show doc modal */ }}>查看记录表模板</a>
-                        <p style={{ marginTop: 8, fontSize: 12, color: '#999' }}>* 实际开发中此处可集成Markdown编辑器或表单</p>
+                <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
+                    <div style={{ marginBottom: 16, background: '#e6f7ff', padding: '8px 12px', borderRadius: 4, border: '1px solid #91d5ff' }}>
+                        <strong>实操飞行教学日志</strong>
                     </div>
-                    <Form.Item name="content" label="飞行安全记录" rules={[{ required: true }]}>
-                        <TextArea rows={6} placeholder="填写飞行科目、起降次数、留空时间、飞行记录总结..." />
-                    </Form.Item>
+
+                    {/* 1. 基础信息 */}
+                    <Divider orientation="left" style={{ margin: '12px 0' }}>1. 基础信息</Divider>
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <Form.Item label="训练日期" name={['content', 'baseInfo', 'date']} initialValue={dayjs()}>
+                                <DatePicker style={{ width: '100%' }} disabled />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item label="学员姓名">
+                                <Input value={selectedTraining?.customer?.name} disabled />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item 
+                                label="培训科目" 
+                                name={['content', 'baseInfo', 'subject']} 
+                                rules={[{ required: true, message: '请选择培训科目' }]}
+                            >
+                                <Select placeholder="请选择">
+                                    <Option value="模拟练习">模拟练习</Option>
+                                    <Option value="自旋练习">自旋练习</Option>
+                                    <Option value="八字飞行">八字飞行</Option>
+                                    <Option value="模拟考试">模拟考试</Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item 
+                                label="训练时段" 
+                                name={['content', 'baseInfo', 'session']} 
+                                rules={[{ required: true, message: '请选择训练时段' }]}
+                            >
+                                <Select placeholder="请选择">
+                                    <Option value="上午">上午</Option>
+                                    <Option value="下午">下午</Option>
+                                    <Option value="晚上">晚上</Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item 
+                                label="训练场地" 
+                                name={['content', 'baseInfo', 'site']} 
+                                rules={[{ required: true, message: '请选择训练场地' }]}
+                            >
+                                <Select placeholder="请选择">
+                                    <Option value="室内">室内</Option>
+                                    <Option value="室外">室外</Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    {/* 2. 飞行前检查 */}
+                    <Divider orientation="left" style={{ margin: '12px 0' }}>2. 飞行前检查</Divider>
+                    {[
+                        { key: 'structure', label: '2.1 机身结构（无裂纹/变形）' },
+                        { key: 'propeller', label: '2.2 螺旋桨安装（牢固/无损伤）' },
+                        { key: 'battery', label: '2.3 电池电量（≥80%）' },
+                        { key: 'remote', label: '2.4 遥控器连接（信号稳定）' },
+                        { key: 'gps', label: '2.5 GPS信号（≥8颗卫星）' },
+                        { key: 'mode', label: '2.6 飞行模式（姿态/GPS切换正常）' }
+                    ].map(item => (
+                        <Form.Item 
+                            key={item.key}
+                            label={item.label} 
+                            name={['content', 'preCheck', item.key]} 
+                            rules={[{ required: true, message: '请选择检查结果' }]}
+                            initialValue="NORMAL"
+                        >
+                            <Radio.Group>
+                                <Radio value="NORMAL">正常</Radio>
+                                <Radio value="ABNORMAL">异常</Radio>
+                            </Radio.Group>
+                        </Form.Item>
+                    ))}
+
+                    {/* 3. 环境检查 */}
+                    <Divider orientation="left" style={{ margin: '12px 0' }}>3. 环境检查</Divider>
+                    {[
+                        { key: 'weather', label: '3.1 天气（风速≤5m/s，能见度≥1km）' },
+                        { key: 'airspace', label: '3.2 空域许可（已申请/无冲突）' },
+                        { key: 'obstacle', label: '3.3 场地障碍物（无高大建筑/电线）' },
+                        { key: 'safetyZone', label: '3.4 人员安全区（≥10m范围无无关人员）' }
+                    ].map(item => (
+                        <Form.Item 
+                            key={item.key}
+                            label={item.label} 
+                            name={['content', 'envCheck', item.key]} 
+                            rules={[{ required: true, message: '请选择检查结果' }]}
+                            initialValue="COMPLIANT"
+                        >
+                            <Radio.Group>
+                                <Radio value="COMPLIANT">符合</Radio>
+                                <Radio value="NON_COMPLIANT">不符合</Radio>
+                            </Radio.Group>
+                        </Form.Item>
+                    ))}
+
+                    <Divider />
+                    
                     <Form.Item name="result" label="此次训练是否通过" rules={[{ required: true }]}>
                         <Radio.Group>
                             <Radio value="PASS">是</Radio>
                             <Radio value="FAIL">否</Radio>
                         </Radio.Group>
                     </Form.Item>
-                </>
+                </div>
             );
         }
         return null;
@@ -383,7 +492,31 @@ const TrainingPage = () => {
                                             >
                                                 {log.score !== null && <p>分数: <strong>{log.score}</strong></p>}
                                                 {log.result && <p>结果: <strong>{log.result === 'PASS' ? '通过' : log.result === 'FAIL' ? '未通过' : log.result}</strong></p>}
-                                                {log.content && <div style={{ whiteSpace: 'pre-wrap', background: '#fafafa', padding: 8, borderRadius: 4 }}>{log.content}</div>}
+                                                
+                                                {/* Render content based on stage type */}
+                                                {log.content && (
+                                                    <div style={{ whiteSpace: 'pre-wrap', background: '#fafafa', padding: 8, borderRadius: 4, marginTop: 8 }}>
+                                                        {stageKey === 'PRACTICAL' ? (() => {
+                                                            try {
+                                                                const contentObj = JSON.parse(log.content);
+                                                                return (
+                                                                    <div style={{ fontSize: 12 }}>
+                                                                        <p><strong>科目:</strong> {contentObj.baseInfo?.subject} | <strong>时段:</strong> {contentObj.baseInfo?.session}</p>
+                                                                        <p><strong>场地:</strong> {contentObj.baseInfo?.site}</p>
+                                                                        <Divider style={{ margin: '4px 0' }} />
+                                                                        <p><strong>检查概况:</strong></p>
+                                                                        <ul style={{ paddingLeft: 16, margin: 0 }}>
+                                                                           <li>机身/桨/电: {contentObj.preCheck?.structure === 'NORMAL' ? '正常' : '异常'} / {contentObj.preCheck?.propeller === 'NORMAL' ? '正常' : '异常'} / {contentObj.preCheck?.battery === 'NORMAL' ? '正常' : '异常'}</li>
+                                                                           <li>天气/空域: {contentObj.envCheck?.weather === 'COMPLIANT' ? '符合' : '不符合'} / {contentObj.envCheck?.airspace === 'COMPLIANT' ? '符合' : '不符合'}</li>
+                                                                        </ul>
+                                                                    </div>
+                                                                );
+                                                            } catch (e) {
+                                                                return log.content;
+                                                            }
+                                                        })() : log.content}
+                                                    </div>
+                                                )}
                                                 
                                                 {log.status === 'APPROVED' && log.approvedAt && (
                                                     <div style={{ marginTop: 8, fontSize: 12, color: '#999' }}>
