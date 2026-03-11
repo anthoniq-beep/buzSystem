@@ -66,21 +66,27 @@ async function main() {
   
   console.log('Start seeding users...');
 
-  // Create Admin User
-  const adminExists = await prisma.user.findUnique({ where: { username: 'admin' } });
-  if (!adminExists) {
-      await prisma.user.create({
-          data: {
-              username: 'admin',
-              password: 'admin', // Plain text for simplicity, in production use bcrypt
-              name: '系统管理员',
-              role: 'ADMIN',
-              departmentId: (await prisma.department.findFirst({ where: { name: '总经办' } }))?.id
-          }
-      });
-      console.log('Created user: admin/admin');
+  const adminDept = await prisma.department.findFirst({ where: { name: '总经办' } });
+
+  if (adminDept) {
+      // Create Admin User
+      const adminExists = await prisma.user.findUnique({ where: { username: 'admin' } });
+      if (!adminExists) {
+          await prisma.user.create({
+              data: {
+                  username: 'admin',
+                  password: 'admin', // Plain text for simplicity, in production use bcrypt
+                  name: '系统管理员',
+                  role: 'ADMIN',
+                  departmentId: adminDept.id
+              }
+          });
+          console.log('Created user: admin/admin');
+      } else {
+          console.log('User admin exists');
+      }
   } else {
-      console.log('User admin exists');
+      console.warn('Department 总经办 not found, skipping admin user creation');
   }
 
   console.log('Seeding finished.');

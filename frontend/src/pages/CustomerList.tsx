@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
-import { Table, Tag, Button, Space, Card, Modal, Form, Input, Select, App, Tooltip, Popover, InputNumber } from 'antd';
-import { PlusOutlined, UserOutlined, ClockCircleOutlined, MessageOutlined, UserAddOutlined, PhoneOutlined, TeamOutlined, FileDoneOutlined } from '@ant-design/icons';
+import { useEffect, useState, useRef } from 'react';
+import { Table, Tag, Button, Space, Card, Modal, Form, Input, Select, App, Tooltip, Popover, InputNumber, Upload } from 'antd';
+import { PlusOutlined, UserOutlined, ClockCircleOutlined, MessageOutlined, UserAddOutlined, PhoneOutlined, TeamOutlined, FileDoneOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 import api from '../services/api';
 import type { Customer } from '../types';
 import { SaleStage } from '../types';
@@ -9,12 +10,13 @@ import { useAuth } from '../context/AuthContext';
 import dayjs from 'dayjs';
 
 const CustomerList = () => {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const { user } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [channels, setChannels] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -23,6 +25,7 @@ const CustomerList = () => {
   const [stageLogs, setStageLogs] = useState<any[]>([]);
   const [isCustomCourse, setIsCustomCourse] = useState(false);
   
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const [form] = Form.useForm();
   const [logForm] = Form.useForm();
@@ -172,6 +175,91 @@ const CustomerList = () => {
       );
   };
 
+  const handleDownloadTemplate = () => {
+    const header = ['客户姓名', '手机号', '渠道来源', '负责人', '公司名称', '课程类型', '课程名称'];
+    const data = [
+      ['张三', '13800138000', '大众点评', '王五', '某某公司', 'CAAC', '无人机执照'],
+      ['李四', '13900139000', '老客户转介绍', '', '', '青少年', '冬令营'],
+    ];
+    
+    const ws = XLSX.utils.aoa_to_sheet([header, ...data]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+    XLSX.writeFile(wb, "客户导入模板.xlsx");
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportLoading(true);
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        
+        // Transform data
+        // Assume row 0 is header
+        if (data.length < 2) {
+            message.error('文件内容为空');
+            return;
+        }
+
+        const rows = data.slice(1);
+        
+        const customers = rows.map((row: any) => ({
+            name: row[0],
+            phone: row[1],
+            channelName: row[2],
+            ownerName: row[3],
+            companyName: row[4],
+            courseType: row[5],
+            courseName: row[6]
+        })).filter((c: any) => c.name && c.phone); // Basic validation
+
+        if (customers.length === 0) {
+             message.error('未找到有效数据');
+             return;
+        }
+
+        const res = await api.post('/customers/batch', { customers });
+        
+        if (res.data.errors && res.data.errors.length > 0) {
+            modal.warning({
+                title: '导入部分完成',
+                content: (
+                    <div>
+                        <p>{res.data.message}</p>
+                        <div style={{ maxHeight: 200, overflow: 'auto', marginTop: 8 }}>
+                            {res.data.errors.map((err: any, idx: number) => (
+                                <div key={idx} style={{ color: 'red', fontSize: 12 }}>
+                                    {err.name}: {err.error}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )
+            });
+        } else {
+            message.success(`成功导入 ${customers.length} 条数据`);
+        }
+        fetchData();
+
+      } catch (error: any) {
+        console.error('Import error:', error);
+        message.error('导入失败: ' + (error.response?.data?.message || error.message));
+      } finally {
+        setImportLoading(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
   const columns = [
     {
       title: '客户名称',
@@ -257,9 +345,24 @@ const CustomerList = () => {
     <div>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
         <h2>客户管理</h2>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsModalOpen(true)}>
-          录入线索
-        </Button>
+        <Space>
+            <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
+                下载模板
+            </Button>
+            <Button icon={<UploadOutlined />} loading={importLoading} onClick={() => fileInputRef.current?.click()}>
+                批量导入
+            </Button>
+            <input 
+                type="file" 
+                ref={fileInputRef} 
+                style={{ display: 'none' }} 
+                accept=".xlsx, .xls" 
+                onChange={handleFileUpload}
+            />
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsModalOpen(true)}>
+            录入线索
+            </Button>
+        </Space>
       </div>
       
       <Card styles={{ body: { padding: 0 } }}>

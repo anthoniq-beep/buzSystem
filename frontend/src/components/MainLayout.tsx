@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Layout, Menu, Avatar, Dropdown, Space, Typography, theme, Modal, Form, Input, App } from 'antd';
+import { Layout, Menu, Avatar, Dropdown, Space, Typography, theme, Modal, Form, Input, App, Button } from 'antd';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   UserOutlined,
@@ -17,8 +17,11 @@ import {
   MenuUnfoldOutlined,
   FileTextOutlined,
   RocketOutlined,
+  BulbOutlined,
+  BulbFilled,
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { Role } from '../types';
 import api from '../services/api';
 
@@ -31,6 +34,7 @@ const MainLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { isDarkMode, toggleTheme } = useTheme();
   const { message } = App.useApp();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [passwordForm] = Form.useForm();
@@ -155,39 +159,71 @@ const MainLayout = () => {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider trigger={null} collapsible collapsed={collapsed}>
-        <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-            <img src="/logo.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      <Sider trigger={null} collapsible collapsed={collapsed} width={240} style={{ 
+          boxShadow: '2px 0 8px 0 rgba(29, 35, 41, 0.05)', 
+          zIndex: 10,
+          background: isDarkMode ? undefined : '#2C3E50' // Ensure dark sidebar in light mode
+      }}>
+        <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: 'rgba(255,255,255,0.05)' }}>
+            <img src="/logo.png" alt="Logo" style={{ width: '80%', height: '80%', objectFit: 'contain' }} />
         </div>
         <Menu
-          theme="dark"
+          theme="dark" // Always use dark theme for sidebar
           mode="inline"
           selectedKeys={[location.pathname]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
+          style={{ 
+              background: 'transparent',
+              borderRight: 'none',
+              padding: '16px 8px'
+          }}
         />
       </Sider>
       <Layout>
-        <Header style={{ padding: '0 24px', background: colorBgContainer, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Header style={{ 
+            padding: '0 24px', 
+            background: isDarkMode ? '#0A192F' : '#ffffff', 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            boxShadow: isDarkMode ? 'none' : '0 1px 4px rgba(0,21,41,0.08)',
+            zIndex: 9,
+            height: 64
+        }}>
           <Space>
-            {collapsed ? <MenuUnfoldOutlined onClick={() => setCollapsed(!collapsed)} /> : <MenuFoldOutlined onClick={() => setCollapsed(!collapsed)} />}
-            <Typography.Title level={4} style={{ margin: 0 }}>BuzSystem</Typography.Title>
+            {collapsed ? <MenuUnfoldOutlined onClick={() => setCollapsed(!collapsed)} style={{ fontSize: 18 }} /> : <MenuFoldOutlined onClick={() => setCollapsed(!collapsed)} style={{ fontSize: 18 }} />}
+            <Typography.Title level={4} style={{ margin: 0, fontWeight: 600 }}>BuzSystem</Typography.Title>
           </Space>
           <Space>
-            <Text>{user?.name || user?.username}</Text>
-            <Dropdown menu={userMenu} placement="bottomRight">
-              <Avatar icon={<UserOutlined />} style={{ cursor: 'pointer' }} />
-            </Dropdown>
+            <Button
+              type="text"
+              icon={isDarkMode ? <BulbOutlined /> : <BulbFilled />}
+              onClick={toggleTheme}
+              style={{ fontSize: '18px', color: isDarkMode ? '#fff' : '#64748B' }}
+            />
+            <Space style={{ cursor: 'pointer' }}>
+                <Dropdown menu={userMenu} placement="bottomRight">
+                    <Space>
+                        <Avatar 
+                            icon={<UserOutlined />} 
+                            style={{ backgroundColor: isDarkMode ? '#1E3A5F' : '#E2E8F0', color: isDarkMode ? '#fff' : '#475569' }} 
+                        />
+                        <Text strong style={{ color: isDarkMode ? '#fff' : '#334155' }}>{user?.name || user?.username}</Text>
+                    </Space>
+                </Dropdown>
+            </Space>
           </Space>
         </Header>
         <Content
           style={{
-            margin: '24px 16px',
+            margin: '24px',
             padding: 24,
             minHeight: 280,
-            background: colorBgContainer,
-            borderRadius: borderRadiusLG,
+            background: isDarkMode ? '#112240' : '#ffffff',
+            borderRadius: 16,
             overflow: 'auto',
+            boxShadow: isDarkMode ? 'none' : '0 1px 3px 0 rgba(0, 0, 0, 0.02), 0 2px 8px 0 rgba(0, 0, 0, 0.02)'
           }}
         >
           <Outlet />
