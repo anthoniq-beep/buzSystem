@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import { Table, Tag, Button, Space, Card, Modal, Form, Input, Select, App, Tooltip, Popover, InputNumber, Upload } from 'antd';
 import { PlusOutlined, UserOutlined, ClockCircleOutlined, MessageOutlined, UserAddOutlined, PhoneOutlined, TeamOutlined, FileDoneOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 import api from '../services/api';
 import type { Customer } from '../types';
 import { SaleStage } from '../types';
 import { useAuth } from '../context/AuthContext';
 import dayjs from 'dayjs';
-import * as XLSX from 'xlsx';
 import { Role } from '../types';
 // import { COURSE_OPTIONS } from '../constants/courses';
 
@@ -46,12 +46,13 @@ const COURSE_OPTIONS = [
 ];
 
 const CustomerList = () => {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const { user } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [channels, setChannels] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -60,7 +61,7 @@ const CustomerList = () => {
   const [stageLogs, setStageLogs] = useState<any[]>([]);
   const [isCustomCourse, setIsCustomCourse] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  
+
   const navigate = useNavigate();
   const [form] = Form.useForm();
   const [logForm] = Form.useForm();
@@ -115,25 +116,8 @@ const CustomerList = () => {
     fetchData();
   }, []);
 
-  const handleDownloadTemplate = () => {
-    const template = [
-      {
-        '客户姓名': '张三',
-        '联系电话': '13800000000',
-        '渠道来源': '抖音', // 需与系统内渠道名称一致
-        '负责人': '李四', // 需与系统内员工姓名一致
-        '公司名称': '某某航空公司',
-        '课程类型': 'CAAC',
-        '课程名称': '多旋翼视距内驾驶员'
-      }
-    ];
-    const ws = XLSX.utils.json_to_sheet(template);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Template');
-    XLSX.writeFile(wb, '客户导入模板.xlsx');
-  };
-
   const handleImport = (file: any) => {
+    setImportLoading(true);
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
@@ -190,6 +174,7 @@ const CustomerList = () => {
         message.error('文件解析失败');
       } finally {
         setLoading(false);
+        setImportLoading(false);
       }
     };
     reader.readAsBinaryString(file);
@@ -377,6 +362,19 @@ const CustomerList = () => {
       );
   };
 
+  const handleDownloadTemplate = () => {
+    const header = ['客户姓名', '手机号', '渠道来源', '负责人', '公司名称', '课程类型', '课程名称'];
+    const data = [
+      ['张三', '13800138000', '大众点评', '王五', '某某公司', 'CAAC', '无人机执照'],
+      ['李四', '13900139000', '老客户转介绍', '', '', '青少年', '冬令营'],
+    ];
+    
+    const ws = XLSX.utils.aoa_to_sheet([header, ...data]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+    XLSX.writeFile(wb, "客户导入模板.xlsx");
+  };
+
   const columns = [
     {
       title: '客户名称',
@@ -520,17 +518,25 @@ const CustomerList = () => {
   return (
     <div>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
-        <h2>客户管理 (v2.0)</h2>
+        <h2>客户管理</h2>
         <Space>
-          <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>下载模板</Button>
+          <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
+            下载模板
+          </Button>
           <Upload beforeUpload={handleImport} showUploadList={false} accept=".xlsx,.xls">
-              <Button icon={<UploadOutlined />}>批量导入</Button>
+            <Button icon={<UploadOutlined />} loading={importLoading}>
+              批量导入
+            </Button>
           </Upload>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => {
-            setEditingCustomer(null);
-            form.resetFields();
-            setIsModalOpen(true);
-          }}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setEditingCustomer(null);
+              form.resetFields();
+              setIsModalOpen(true);
+            }}
+          >
             录入线索
           </Button>
         </Space>

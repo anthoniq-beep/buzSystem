@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Badge, Layout, List, Menu, Avatar, Dropdown, Space, Typography, theme, Modal, Form, Input, App, Switch, Button } from 'antd';
+import { Badge, Layout, List, Menu, Avatar, Dropdown, Space, Typography, theme, Modal, Form, Input, App, Button } from 'antd';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   UserOutlined,
@@ -17,8 +17,8 @@ import {
   MenuUnfoldOutlined,
   FileTextOutlined,
   RocketOutlined,
-  SunOutlined,
-  MoonOutlined,
+  BulbOutlined,
+  BulbFilled,
   MailOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
@@ -49,9 +49,8 @@ const MainLayout = () => {
   const [announcementShown, setAnnouncementShown] = useState(false);
 
   useEffect(() => {
-    // Redirect Training Dept users from dashboard/root to training page
     if (user?.department?.name === '教培部' && (location.pathname === '/' || location.pathname === '/dashboard')) {
-        navigate('/training');
+      navigate('/training');
     }
   }, [user, location.pathname, navigate]);
 
@@ -251,54 +250,80 @@ const MainLayout = () => {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider trigger={null} collapsible collapsed={collapsed}>
-        <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-            <img
-              src="/logo.png"
-              alt="Logo"
-              style={{
-                height: collapsed ? 28 : 34,
-                width: 'auto',
-                maxWidth: '80%',
-                objectFit: 'contain',
-              }}
-            />
+      <Sider trigger={null} collapsible collapsed={collapsed} width={240} style={{ 
+          boxShadow: '2px 0 8px 0 rgba(29, 35, 41, 0.05)', 
+          zIndex: 10,
+          background: isDarkMode ? undefined : '#2C3E50'
+      }}>
+        <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: 'rgba(255,255,255,0.05)' }}>
+          <img
+            src="/logo.png"
+            alt="Logo"
+            style={{
+              height: collapsed ? 28 : 34,
+              width: 'auto',
+              maxWidth: '80%',
+              objectFit: 'contain',
+            }}
+          />
         </div>
         <Menu
-          theme={isDarkMode ? 'dark' : 'light'}
+          theme="dark"
           mode="inline"
           selectedKeys={[location.pathname]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
+          style={{ 
+              background: 'transparent',
+              borderRight: 'none',
+              padding: '16px 8px'
+          }}
         />
       </Sider>
       <Layout>
-        <Header style={{ padding: '0 24px', background: colorBgContainer, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Header style={{ 
+            padding: '0 24px', 
+            background: isDarkMode ? '#0A192F' : '#ffffff', 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            boxShadow: isDarkMode ? 'none' : '0 1px 4px rgba(0,21,41,0.08)',
+            zIndex: 9,
+            height: 64
+        }}>
           <Space>
-            {collapsed ? <MenuUnfoldOutlined onClick={() => setCollapsed(!collapsed)} /> : <MenuFoldOutlined onClick={() => setCollapsed(!collapsed)} />}
-            <Typography.Title level={4} style={{ margin: 0 }}>BuzSystem</Typography.Title>
+            {collapsed ? <MenuUnfoldOutlined onClick={() => setCollapsed(!collapsed)} style={{ fontSize: 18 }} /> : <MenuFoldOutlined onClick={() => setCollapsed(!collapsed)} style={{ fontSize: 18 }} />}
+            <Typography.Title level={4} style={{ margin: 0, fontWeight: 600 }}>BuzSystem</Typography.Title>
           </Space>
           <Space>
-            <Switch
-              checkedChildren={<MoonOutlined />}
-              unCheckedChildren={<SunOutlined />}
-              checked={isDarkMode}
-              onChange={toggleTheme}
+            <Button
+              type="text"
+              icon={isDarkMode ? <BulbOutlined /> : <BulbFilled />}
+              onClick={toggleTheme}
+              style={{ fontSize: '18px', color: isDarkMode ? '#fff' : '#64748B' }}
             />
-            <Text>{user?.name || user?.username}</Text>
-            <Dropdown menu={userMenu} placement="bottomRight">
-              <Avatar icon={<UserOutlined />} style={{ cursor: 'pointer' }} />
-            </Dropdown>
+            <Space style={{ cursor: 'pointer' }}>
+                <Dropdown menu={userMenu} placement="bottomRight">
+                    <Space>
+                        <Avatar 
+                            icon={<UserOutlined />} 
+                            style={{ backgroundColor: isDarkMode ? '#1E3A5F' : '#E2E8F0', color: isDarkMode ? '#fff' : '#475569' }} 
+                        />
+                        <Text strong style={{ color: isDarkMode ? '#fff' : '#334155' }}>{user?.name || user?.username}</Text>
+                    </Space>
+                </Dropdown>
+            </Space>
           </Space>
         </Header>
         <Content
           style={{
-            margin: '24px 16px',
+            margin: '24px',
             padding: 24,
             minHeight: 280,
-            background: colorBgContainer,
-            borderRadius: borderRadiusLG,
+            background: isDarkMode ? '#112240' : '#ffffff',
+            borderRadius: 16,
             overflow: 'auto',
+            boxShadow: isDarkMode ? 'none' : '0 1px 3px 0 rgba(0, 0, 0, 0.02), 0 2px 8px 0 rgba(0, 0, 0, 0.02)'
           }}
         >
           <Outlet />

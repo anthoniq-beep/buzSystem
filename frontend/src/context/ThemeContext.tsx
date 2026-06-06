@@ -1,4 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { ConfigProvider, theme } from 'antd';
+import zhCN from 'antd/locale/zh_CN';
+import { darkTheme, lightTheme } from '../theme';
 
 interface ThemeContextType {
   isDarkMode: boolean;
@@ -10,20 +13,26 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('theme');
-    return saved ? saved === 'dark' : true; // Default to dark as per original code
+    return saved ? saved === 'dark' : true;
   });
 
   useEffect(() => {
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
 
-  const toggleTheme = () => {
-    setIsDarkMode(prev => !prev);
-  };
+  const toggleTheme = () => setIsDarkMode((prev) => !prev);
 
   return (
     <ThemeContext.Provider value={{ isDarkMode, toggleTheme }}>
-      {children}
+      <ConfigProvider
+        locale={zhCN}
+        theme={{
+          algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
+          ...(isDarkMode ? darkTheme : lightTheme),
+        }}
+      >
+        {children}
+      </ConfigProvider>
     </ThemeContext.Provider>
   );
 };

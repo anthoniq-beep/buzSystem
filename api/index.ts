@@ -25,7 +25,7 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // Note: Static file serving is removed for Vercel Serverless Function.
 // Frontend should be deployed as a separate static build.

@@ -365,6 +365,86 @@ router.post('/:id/log', authenticate, async (req: any, res) => {
     }
 });
 
+// Batch Create Customers (Import)
+router.post('/batch', authenticate, async (req: any, res) => {
+    const { customers } = req.body; // Array of customer objects
+    
+    if (!Array.isArray(customers) || customers.length === 0) {
+        return res.status(400).json({ message: 'Invalid data format' });
+    }
+
+    let successCount = 0;
+    let failCount = 0;
+    const errors: any[] = [];
+
+    try {
+        // Prepare data for batch insert? Or loop to handle relations?
+        // Loop is safer to handle relations (Channel, User) and avoid partial failure
+        // But createMany is faster.
+        // Let's loop for now to be safe and provide detailed error report.
+        
+        for (const customerData of customers) {
+            try {
+                // Resolve Channel ID
+                let channelId = null;
+                if (customerData.channelName) {
+                    const channel = await prisma.channel.findFirst({
+                        where: { name: customerData.channelName }
+                    });
+                    if (channel) channelId = channel.id;
+                    else {
+                        // Optional: Create channel if not exists? Or just null?
+                        // Let's create it if missing, or default to null
+                        const newChannel = await prisma.channel.create({
+                            data: { name: customerData.channelName }
+                        });
+                        channelId = newChannel.id;
+                    }
+                }
+
+                // Resolve Owner ID
+                let ownerId = req.user.userId;
+                if (customerData.ownerName) {
+                    const owner = await prisma.user.findFirst({
+                        where: { name: customerData.ownerName }
+                    });
+                    if (owner) ownerId = owner.id;
+                }
+
+                await prisma.customer.create({
+                    data: {
+                        name: customerData.name,
+                        phone: String(customerData.phone),
+                        companyName: customerData.companyName,
+                        courseType: customerData.courseType,
+                        courseName: customerData.courseName,
+                        channelId,
+                        ownerId,
+                        status: 'LEAD',
+                        training: {
+                            create: { status: 'PENDING' }
+                        }
+                    }
+                });
+                successCount++;
+            } catch (err: any) {
+                console.error('Import row error:', err);
+                failCount++;
+                errors.push({ name: customerData.name, error: err.message });
+            }
+        }
+
+        res.json({ 
+            message: `Import completed. Success: ${successCount}, Failed: ${failCount}`,
+            errors 
+        });
+
+    } catch (error) {
+        console.error('Batch import error:', error);
+        res.status(500).json({ message: 'Internal server error during import' });
+    }
+});
+
 // Update customer
 router.put('/:id', authenticate, async (req: any, res) => {
     const { id } = req.params;
