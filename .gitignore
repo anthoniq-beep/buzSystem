@@ -28,3 +28,11 @@ Thumbs.db
 dist
 build
 coverage
+
+# Local deploy scripts / artifacts (contain environment-specific secrets)
+deploy/
+deploy_success.txt
+export_project.js
+
+# Vite env (project-specific)
+frontend/.env.development

@@ -56,12 +56,33 @@ export interface User {
   phone: string;
   role: Role;
   status: EmployeeStatus;
+  canSendMail?: boolean;
   departmentId?: number;
   department?: Department;
   supervisorId?: number;
   supervisor?: User;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface InternalMail {
+  id: number;
+  title: string;
+  content: string;
+  senderId: number;
+  sender?: Pick<User, 'id' | 'name' | 'username'>;
+  recipientId: number;
+  readAt?: string | null;
+  createdAt: string;
+}
+
+export interface Announcement {
+  id: number;
+  title: string;
+  mediaUrl: string;
+  isActive: boolean;
+  createdAt: string;
+  seen?: boolean;
 }
 
 export interface SalesTarget {

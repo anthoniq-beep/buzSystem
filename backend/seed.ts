@@ -14,10 +14,15 @@ async function main() {
   // await prisma.department.deleteMany();
 
   // 2. Create Departments
-  const salesDept = await prisma.department.create({
-    data: { name: '销售部' }
-  });
-  console.log('Created Department: 销售部');
+  const salesDept =
+    (await prisma.department.findFirst({ where: { name: '销售部' } })) ??
+    (await prisma.department.create({ data: { name: '销售部' } }));
+  console.log('Upserted Department: 销售部');
+
+  const channelSalesDept =
+    (await prisma.department.findFirst({ where: { name: '渠道销售部' } })) ??
+    (await prisma.department.create({ data: { name: '渠道销售部' } }));
+  console.log('Upserted Department: 渠道销售部');
 
   // 3. Create Users
   // Admin (already exists from previous step, skipping or handling error)

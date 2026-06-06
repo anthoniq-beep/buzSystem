@@ -14,6 +14,15 @@ const COURSE_STD_PRICES: Record<string, number> = {
   '教员': 19500
 };
 
+function escapeHtml(text: string) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function digitUppercase(n: number) {
     if (n === undefined || n === null) return '';
     const fraction = ['角', '分'];
@@ -129,6 +138,7 @@ const ContractPage = () => {
       
       const wrapBlue = (text: string) => `<span style="color: #1677ff; font-weight: bold; padding: 0 4px;">${text}</span>`;
       const placeholder = (text: string) => `<span style="color: #ccc;">${text}</span>`;
+      const remarkText = formValues.remark ? wrapBlue(escapeHtml(formValues.remark)) : placeholder('(无)');
 
       // Replace placeholders
       content = content.replace(/\[合同编号\]/g, wrapBlue(contractNo || '________________'));
@@ -160,7 +170,7 @@ const ContractPage = () => {
                 <td>${wrapBlue(`¥${actualPrice}`)}</td>
                 <td>0</td>
                 <td>${wrapBlue(`¥${actualPrice}`)}</td>
-                <td></td>
+                <td>${remarkText}</td>
               </tr>`;
           });
       } else {
@@ -172,7 +182,7 @@ const ContractPage = () => {
                 <td>${placeholder('(合同单价)')}</td>
                 <td>0</td>
                 <td>${placeholder('(金额)')}</td>
-                <td></td>
+                <td>${remarkText}</td>
               </tr>`;
       }
       
@@ -205,6 +215,7 @@ const ContractPage = () => {
             courseType: 'CAAC',
             courseName: selectedCourses.join(','),
             contractAmount: totalAmount,
+            note: values.remark,
             status: 'DEAL' // Auto-move to DEAL
         };
         console.log('Sending Payload:', payload); // Debug Log 3
@@ -351,6 +362,10 @@ const ContractPage = () => {
                   ))}
               </div>
           )}
+
+          <Form.Item name="remark" label="备注">
+            <Input.TextArea rows={3} placeholder="请输入合同备注（将显示在合同方案表格备注列）" maxLength={200} showCount />
+          </Form.Item>
 
           <Form.Item style={{ marginTop: 24 }}>
             <Space style={{ width: '100%' }} direction="vertical">

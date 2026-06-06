@@ -1,36 +1,32 @@
 import prisma from './prisma';
 
-export const getAccessibleUserIds = async (currentUser: any) => {
-    const { userId, role, departmentId } = currentUser;
-    
-    if (role === 'ADMIN') {
-        return undefined; // No filter
-    }
-    
-    if (role === 'MANAGER') {
-        // Get users in same department
-        if (!departmentId) return [userId];
+export async function getAccessibleUserIds(user: any) {
+    if (!user) return null; // Should not happen if authenticated
+    const currentUserId = user.userId ?? user.id;
+
+    if (user.role === 'ADMIN') return null; // All access
+
+    if (user.role === 'MANAGER') {
+        if (!user.departmentId) return currentUserId ? [currentUserId] : []; // Manager with no dept sees only self?
+        // Get all users in department
         const users = await prisma.user.findMany({
-            where: { departmentId: departmentId },
+            where: { departmentId: user.departmentId },
             select: { id: true }
         });
-        return users.map(u => u.id);
+        return users.map((u: any) => u.id);
     }
-    
-    if (role === 'SUPERVISOR') {
-        // Get self and direct subordinates
+
+    if (user.role === 'SUPERVISOR') {
+        if (!user.departmentId) return currentUserId ? [currentUserId] : [];
+        // Supervisor sees self and subordinates (Wait, supervisor logic might be dept based too?)
+        // Let's assume Supervisor sees department for now, OR specific subordinates
+        // Usually Supervisor sees Dept.
         const users = await prisma.user.findMany({
-            where: { 
-                OR: [
-                    { id: userId },
-                    { supervisorId: userId }
-                ]
-            },
+            where: { departmentId: user.departmentId },
             select: { id: true }
         });
-        return users.map(u => u.id);
+        return users.map((u: any) => u.id);
     }
-    
-    // EMPLOYEE: Only self
-    return [userId];
-};
+
+    return currentUserId ? [currentUserId] : [];
+}

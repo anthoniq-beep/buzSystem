@@ -13,8 +13,13 @@ router.get('/', authenticate, async (req: any, res) => {
         // Filter Logic:
         // - Admin/Manager: See all (or dept based)
         // - Instructor: See assigned only
+        // - Only show customers who have signed (status = DEAL)
         
-        const where: any = {};
+        const where: any = {
+            customer: {
+                status: 'DEAL'
+            }
+        };
         
         // If not admin/manager, restrict to assigned
         if (role !== 'ADMIN' && role !== 'MANAGER') {
@@ -85,6 +90,18 @@ router.post('/:id/log', authenticate, async (req: any, res) => {
     const { stage, score, result, content } = req.body;
     
     try {
+        // Auto-approve logic:
+        // If stage is NOT Graduation, status = APPROVED immediately.
+        // If stage IS Graduation, status = SUBMITTED (needs Manager approval).
+        
+        // Ensure even if role is Manager, the status is set correctly.
+        // The condition `stage !== 'GRADUATION'` is sufficient for auto-approval.
+        
+        let status = 'APPROVED';
+        if (stage === 'GRADUATION') {
+            status = 'SUBMITTED';
+        }
+
         const log = await prisma.trainingLog.create({
             data: {
                 trainingId: Number(id),
@@ -92,7 +109,10 @@ router.post('/:id/log', authenticate, async (req: any, res) => {
                 score: score ? Number(score) : null,
                 result,
                 content,
-                status: 'SUBMITTED'
+                status: status,
+                // If auto-approved, set approvedBy to self (or system) and time
+                approvedBy: status === 'APPROVED' ? req.user.userId : null,
+                approvedAt: status === 'APPROVED' ? new Date() : null
             }
         });
         

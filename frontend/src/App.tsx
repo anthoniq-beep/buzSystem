@@ -6,6 +6,7 @@ import CustomerDetail from './pages/CustomerDetail';
 import CommissionPage from './pages/CommissionPage';
 import ContractPage from './pages/ContractPage';
 import TrainingPage from './pages/TrainingPage';
+import MailPage from './pages/MailPage';
 import AdminDashboard from './pages/AdminDashboard';
 import OrganizationPage from './pages/admin/OrganizationPage';
 import SalesTargetPage from './pages/admin/SalesTargetPage';
@@ -55,6 +56,7 @@ function App() {
         <Route path="commission" element={<CommissionPage />} />
         <Route path="contract" element={<ContractPage />} />
         <Route path="training" element={<TrainingPage />} />
+        <Route path="mail" element={<MailPage />} />
         
         {/* Role Based Routes */}
         <Route path="admin/dashboard" element={<RoleRoute roles={[Role.ADMIN, Role.MANAGER, Role.SUPERVISOR]}><AdminDashboard /></RoleRoute>} />

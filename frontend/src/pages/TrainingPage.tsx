@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Table, Card, Tag, Button, Modal, Form, Select, Steps, Tabs, InputNumber, Radio, Input, message, App, Space, Popconfirm, DatePicker, Row, Col, Divider } from 'antd';
-import { RocketOutlined, UserOutlined, CheckCircleOutlined, ClockCircleOutlined, FileTextOutlined } from '@ant-design/icons';
+import { useState, useEffect, useRef } from 'react';
+import { Table, Card, Tag, Button, Modal, Form, Select, Steps, Tabs, InputNumber, Radio, Input, message, App, Space, Popconfirm, DatePicker, Row, Col, Divider, Checkbox } from 'antd';
+import { RocketOutlined, UserOutlined, CheckCircleOutlined, ClockCircleOutlined, FileTextOutlined, PrinterOutlined } from '@ant-design/icons';
 import api from '../services/api';
 import dayjs from 'dayjs';
 import { useAuth } from '../context/AuthContext';
@@ -16,11 +16,10 @@ const STAGES = {
   SIMULATION: '模拟飞行',
   PRACTICAL: '实操飞行',
   GROUND: '地面站',
-  RETURN: '返航',
-  REPLAN: '重规划'
+  GRADUATION: '结业'
 };
 
-const STAGE_KEYS = ['THEORY', 'SIMULATION', 'PRACTICAL', 'GROUND', 'RETURN', 'REPLAN'];
+const STAGE_KEYS = ['THEORY', 'SIMULATION', 'PRACTICAL', 'GROUND', 'GRADUATION'];
 
 // Course Types Logic
 const getStagesForCourse = (courseName: string) => {
@@ -28,8 +27,19 @@ const getStagesForCourse = (courseName: string) => {
     if (courseName.includes('超视距') || courseName.includes('教员')) {
         return STAGE_KEYS;
     }
-    // Else (VLOS) return only first 3
-    return ['THEORY', 'SIMULATION', 'PRACTICAL'];
+    // Else (VLOS) return only first 3 + Graduation? Usually VLOS also has Practical/Ground.
+    // Assuming standard flow for now, maybe VLOS doesn't need Ground?
+    // Let's stick to user requirement: "Delete Return/Replan, Add Graduation".
+    // If original logic was Theory/Sim/Prac for VLOS, we should probably keep it or check if Ground is needed.
+    // For now let's assume all courses follow the new structure or keep logic simple.
+    // Let's include GROUND for everyone if not specified otherwise, or stick to previous logic of subsets.
+    // Previous logic: VLOS -> Theory, Sim, Practical.
+    // BVLOS -> All.
+    // Let's add GRADUATION to both.
+    if (courseName.includes('超视距') || courseName.includes('教员')) {
+        return STAGE_KEYS;
+    }
+    return ['THEORY', 'SIMULATION', 'PRACTICAL', 'GRADUATION'];
 };
 
 const TrainingPage = () => {
@@ -91,7 +101,8 @@ const TrainingPage = () => {
 
     const handleLogSubmit = async (values: any) => {
         try {
-            // Validate Score Logic
+            // Validate Score Logic - REMOVED per user request
+            /*
             if (currentStage === 'THEORY') {
                 const score = values.score;
                 const courseName = selectedTraining.customer.courseName;
@@ -100,28 +111,60 @@ const TrainingPage = () => {
                 
                 if (score < threshold) {
                     message.error(`分数未达标，需${threshold}分以上才能提交`);
-                    return; // Prevent submission? User said "need X score to submit", implying validation block.
+                    return;
                 }
             }
+            */
             
-            // Format content if it's an object (PRACTICAL stage)
+            // Format content if it's an object (PRACTICAL or GROUND stage)
             let formattedValues = { ...values };
-            if (currentStage === 'PRACTICAL' && values.content && typeof values.content === 'object') {
-                 // Ensure date is formatted if moment/dayjs object
-                 if (values.content.baseInfo?.date) {
-                     values.content.baseInfo.date = dayjs(values.content.baseInfo.date).format('YYYY-MM-DD');
-                 }
-                 formattedValues.content = JSON.stringify(values.content);
+            
+            if (currentStage === 'GROUND') {
+                const content = {
+                    groundStation: values.content?.groundStation ? 'PASS' : 'FAIL',
+                    prePlanning: values.content?.prePlanning ? 'PASS' : 'FAIL',
+                    rePlanning: values.content?.rePlanning ? 'PASS' : 'FAIL',
+                };
+                formattedValues.content = JSON.stringify(content);
+                formattedValues.result = Object.values(content).every(v => v === 'PASS') ? 'PASS' : 'FAIL';
+            }
+            else if (currentStage === 'PRACTICAL') {
+                const content = {
+                    flightTime: values.content?.flightTime,
+                    hover: values.content?.hover ? 'PASS' : 'FAIL',
+                    figure8: values.content?.figure8 ? 'PASS' : 'FAIL',
+                };
+                formattedValues.content = JSON.stringify(content);
+                formattedValues.result = (content.hover === 'PASS' && content.figure8 === 'PASS') ? 'PASS' : 'FAIL';
+            }
+            else if (currentStage === 'GRADUATION') {
+                formattedValues.result = 'PASS';
+                // Trigger print preview after submit? Or maybe user should do it separately.
+                // Requirement: "Click graduation -> auto generate table... print".
+                // So maybe we submit log first, then open print modal.
             }
 
             await api.post(`/training/${selectedTraining.id}/log`, {
                 stage: currentStage,
                 ...formattedValues
             });
-            message.success('提交成功，等待审批');
+            message.success('提交成功');
             setIsLogModalOpen(false);
             logForm.resetFields();
             fetchData();
+            
+            if (currentStage === 'GRADUATION') {
+                // Open print modal with new data (we need to re-fetch or just use current data + new log)
+                // For simplicity, we wait for fetchData to update or just open it with existing data + optimistic update?
+                // Let's just fetch individual training to be sure.
+                try {
+                    const res = await api.get('/training');
+                    const updatedTraining = res.data.find((t: any) => t.id === selectedTraining.id);
+                    if (updatedTraining) {
+                        handleGraduate(updatedTraining);
+                    }
+                } catch(e) {}
+            }
         } catch (error) {
             message.error('提交失败');
         }
@@ -237,12 +280,122 @@ const TrainingPage = () => {
                     >
                         查看/填写日志
                     </Button>
+                    <Button
+                        icon={<PrinterOutlined />}
+                        onClick={() => handlePrintArchive(record)}
+                    >
+                        档案
+                    </Button>
                 </Space>
             )
         }
     ];
 
-    // Helper to render log input form based on stage
+    // Custom Print Function (New Window)
+    const handlePrintArchive = (training: any) => {
+        const logs = training.logs || [];
+        const sortedLogs = [...logs].sort((a: any, b: any) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
+
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            message.error('无法打开打印窗口，请允许弹出窗口');
+            return;
+        }
+
+        // Generate Rows HTML
+        const rowsHtml = sortedLogs.map((log: any) => {
+            let content = '';
+            if (log.score !== null) content = `分数: ${log.score}`;
+            else if (log.stage === 'PRACTICAL') {
+                try {
+                    const c = JSON.parse(log.content);
+                    content = `自旋:${c.hover === 'PASS'?'√':'×'} 八字:${c.figure8 === 'PASS'?'√':'×'} (${c.flightTime === 'AM'?'上午':'下午'})`;
+                } catch(e) { content = '实操记录'; }
+            }
+            else if (log.stage === 'GROUND') {
+                try {
+                    const c = JSON.parse(log.content);
+                    content = `地面站:${c.groundStation==='PASS'?'√':'×'} 预规划:${c.prePlanning==='PASS'?'√':'×'} 重规划:${c.rePlanning==='PASS'?'√':'×'}`;
+                } catch(e) { content = '地面站记录'; }
+            }
+            else if (log.stage === 'GRADUATION') {
+                content = '结业确认';
+            }
+
+            const stageName = (STAGES as any)[log.stage] || log.stage;
+            const resultText = log.result === 'PASS' ? '通过' : log.result === 'FAIL' ? '未通过' : log.result;
+            const dateStr = dayjs(log.submittedAt).format('YYYY-MM-DD');
+
+            return `
+                <tr>
+                    <td>${dateStr}</td>
+                    <td>${stageName}</td>
+                    <td class="content-col">${content}</td>
+                    <td>${resultText}</td>
+                </tr>
+            `;
+        }).join('');
+
+        const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>培训档案-${training.customer.name}</title>
+                <style>
+                    body { font-family: 'SimSun', serif; padding: 40px; color: #000; }
+                    h2 { text-align: center; margin-bottom: 30px; font-size: 24px; }
+                    .header { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 16px; font-weight: bold; }
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 40px; font-size: 14px; }
+                    th, td { border: 1px solid #000; padding: 10px; text-align: center; }
+                    th { background-color: #f5f5f5; }
+                    .content-col { text-align: left; padding-left: 15px; }
+                    .footer { display: flex; justify-content: space-between; margin-top: 60px; padding: 0 20px; font-size: 16px; }
+                    .signature-box { text-align: center; }
+                    .line { border-top: 1px solid #000; width: 180px; margin-top: 60px; }
+                    .print-time { text-align: right; margin-top: 40px; font-size: 12px; color: #666; }
+                    @media print {
+                        @page { margin: 1cm; }
+                        body { padding: 0; }
+                    }
+                </style>
+            </head>
+            <body>
+                <h2>学员培训日志档案</h2>
+                <div class="header">
+                    <div>学员姓名：${training.customer.name}</div>
+                    <div>课程：${training.customer.courseName}</div>
+                    <div>负责人：${training.assignee?.name || '-'}</div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th width="15%">日期</th>
+                            <th width="15%">阶段</th>
+                            <th width="55%">内容/成绩</th>
+                            <th width="15%">结果</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                    </tbody>
+                </table>
+                <div class="footer">
+                    <div class="signature-box">学员签字<div class="line"></div></div>
+                    <div class="signature-box">负责人签字<div class="line"></div></div>
+                    <div class="signature-box">部门负责人签字<div class="line"></div></div>
+                </div>
+                <div class="print-time">打印日期: ${dayjs().format('YYYY-MM-DD HH:mm:ss')}</div>
+                <script>
+                    window.onload = function() { window.print(); }
+                </script>
+            </body>
+            </html>
+        `;
+
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+    };
+
     const renderLogInput = () => {
         if (currentStage === 'THEORY') {
             return (
@@ -250,148 +403,59 @@ const TrainingPage = () => {
                     name="score" 
                     label="理论模拟测试分数" 
                     rules={[{ required: true, message: '请输入分数' }]}
-                    help={
-                        (selectedTraining?.customer?.courseName?.includes('超视距') || selectedTraining?.customer?.courseName?.includes('教员')) 
-                        ? '需90分以上提交' 
-                        : '需80分以上提交'
-                    }
                 >
                     <InputNumber min={0} max={100} style={{ width: '100%' }} />
                 </Form.Item>
             );
         }
-        if (currentStage === 'SIMULATION' || currentStage === 'RETURN' || currentStage === 'REPLAN') {
+        if (currentStage === 'SIMULATION') {
             return (
                 <Form.Item name="result" label="结果" rules={[{ required: true }]}>
                     <Radio.Group>
-                        <Radio value="PASS">通过/完成</Radio>
-                        <Radio value="FAIL">不通过/未完成</Radio>
+                        <Radio value="PASS">通过</Radio>
+                        <Radio value="FAIL">不通过</Radio>
                     </Radio.Group>
                 </Form.Item>
             );
         }
         if (currentStage === 'GROUND') {
             return (
-                <Form.Item name="content" label="地面站测试完成度" rules={[{ required: true }]}>
-                    <TextArea rows={4} placeholder="请填写测试题完成情况..." />
-                </Form.Item>
+                <>
+                    <Form.Item name={['content', 'groundStation']} label="地面站" valuePropName="checked" initialValue={false}>
+                        <Checkbox>通过</Checkbox>
+                    </Form.Item>
+                    <Form.Item name={['content', 'prePlanning']} label="预规划" valuePropName="checked" initialValue={false}>
+                        <Checkbox>通过</Checkbox>
+                    </Form.Item>
+                    <Form.Item name={['content', 'rePlanning']} label="重规划" valuePropName="checked" initialValue={false}>
+                        <Checkbox>通过</Checkbox>
+                    </Form.Item>
+                    {/* Hidden result field to satisfy API if needed, or handle in submit */}
+                </>
             );
         }
         if (currentStage === 'PRACTICAL') {
             return (
-                <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
-                    <div style={{ marginBottom: 16, background: '#e6f7ff', padding: '8px 12px', borderRadius: 4, border: '1px solid #91d5ff' }}>
-                        <strong>实操飞行教学日志</strong>
-                    </div>
-
-                    {/* 1. 基础信息 */}
-                    <Divider orientation="left" style={{ margin: '12px 0' }}>1. 基础信息</Divider>
-                    <Row gutter={16}>
-                        <Col span={12}>
-                            <Form.Item label="训练日期" name={['content', 'baseInfo', 'date']} initialValue={dayjs()}>
-                                <DatePicker style={{ width: '100%' }} disabled />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item label="学员姓名">
-                                <Input value={selectedTraining?.customer?.name} disabled />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item 
-                                label="培训科目" 
-                                name={['content', 'baseInfo', 'subject']} 
-                                rules={[{ required: true, message: '请选择培训科目' }]}
-                            >
-                                <Select placeholder="请选择">
-                                    <Option value="模拟练习">模拟练习</Option>
-                                    <Option value="自旋练习">自旋练习</Option>
-                                    <Option value="八字飞行">八字飞行</Option>
-                                    <Option value="模拟考试">模拟考试</Option>
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item 
-                                label="训练时段" 
-                                name={['content', 'baseInfo', 'session']} 
-                                rules={[{ required: true, message: '请选择训练时段' }]}
-                            >
-                                <Select placeholder="请选择">
-                                    <Option value="上午">上午</Option>
-                                    <Option value="下午">下午</Option>
-                                    <Option value="晚上">晚上</Option>
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item 
-                                label="训练场地" 
-                                name={['content', 'baseInfo', 'site']} 
-                                rules={[{ required: true, message: '请选择训练场地' }]}
-                            >
-                                <Select placeholder="请选择">
-                                    <Option value="室内">室内</Option>
-                                    <Option value="室外">室外</Option>
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                    </Row>
-
-                    {/* 2. 飞行前检查 */}
-                    <Divider orientation="left" style={{ margin: '12px 0' }}>2. 飞行前检查</Divider>
-                    {[
-                        { key: 'structure', label: '2.1 机身结构（无裂纹/变形）' },
-                        { key: 'propeller', label: '2.2 螺旋桨安装（牢固/无损伤）' },
-                        { key: 'battery', label: '2.3 电池电量（≥80%）' },
-                        { key: 'remote', label: '2.4 遥控器连接（信号稳定）' },
-                        { key: 'gps', label: '2.5 GPS信号（≥8颗卫星）' },
-                        { key: 'mode', label: '2.6 飞行模式（姿态/GPS切换正常）' }
-                    ].map(item => (
-                        <Form.Item 
-                            key={item.key}
-                            label={item.label} 
-                            name={['content', 'preCheck', item.key]} 
-                            rules={[{ required: true, message: '请选择检查结果' }]}
-                            initialValue="NORMAL"
-                        >
-                            <Radio.Group>
-                                <Radio value="NORMAL">正常</Radio>
-                                <Radio value="ABNORMAL">异常</Radio>
-                            </Radio.Group>
-                        </Form.Item>
-                    ))}
-
-                    {/* 3. 环境检查 */}
-                    <Divider orientation="left" style={{ margin: '12px 0' }}>3. 环境检查</Divider>
-                    {[
-                        { key: 'weather', label: '3.1 天气（风速≤5m/s，能见度≥1km）' },
-                        { key: 'airspace', label: '3.2 空域许可（已申请/无冲突）' },
-                        { key: 'obstacle', label: '3.3 场地障碍物（无高大建筑/电线）' },
-                        { key: 'safetyZone', label: '3.4 人员安全区（≥10m范围无无关人员）' }
-                    ].map(item => (
-                        <Form.Item 
-                            key={item.key}
-                            label={item.label} 
-                            name={['content', 'envCheck', item.key]} 
-                            rules={[{ required: true, message: '请选择检查结果' }]}
-                            initialValue="COMPLIANT"
-                        >
-                            <Radio.Group>
-                                <Radio value="COMPLIANT">符合</Radio>
-                                <Radio value="NON_COMPLIANT">不符合</Radio>
-                            </Radio.Group>
-                        </Form.Item>
-                    ))}
-
-                    <Divider />
-                    
-                    <Form.Item name="result" label="此次训练是否通过" rules={[{ required: true }]}>
+                <>
+                    <Form.Item label="飞行时间" name={['content', 'flightTime']} rules={[{ required: true }]}>
                         <Radio.Group>
-                            <Radio value="PASS">是</Radio>
-                            <Radio value="FAIL">否</Radio>
+                            <Radio value="AM">上午</Radio>
+                            <Radio value="PM">下午</Radio>
                         </Radio.Group>
                     </Form.Item>
+                    <Form.Item name={['content', 'hover']} label="自旋" valuePropName="checked" initialValue={false}>
+                        <Checkbox>通过</Checkbox>
+                    </Form.Item>
+                    <Form.Item name={['content', 'figure8']} label="八字飞行" valuePropName="checked" initialValue={false}>
+                        <Checkbox>通过</Checkbox>
+                    </Form.Item>
+                </>
+            );
+        }
+        if (currentStage === 'GRADUATION') {
+            return (
+                <div style={{ textAlign: 'center' }}>
+                    <p>确认结业并生成档案？</p>
                 </div>
             );
         }
@@ -460,75 +524,142 @@ const TrainingPage = () => {
                             // But usually we care about the latest status.
                             
                             const logs = selectedTraining.logs?.filter((l: any) => l.stage === stageKey) || [];
-                            const latestLog = logs[0]; // Descending order from API
-                            const isApproved = latestLog?.status === 'APPROVED';
-                            const isSubmitted = latestLog?.status === 'SUBMITTED';
+                            // Sort logs desc by time
+                            const sortedLogs = [...logs].sort((a: any, b: any) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+                            const latestLog = sortedLogs[0]; 
                             
-                            // Can edit/add if: Assigned to Me AND (No Log OR Latest is Rejected/Not Approved)
-                            // But requirement says "Instructor submits -> Manager approves".
-                            // If submitted, wait for approval.
+                            // Check if passed (APPROVED and Result is PASS/COMPLETE/High Score)
+                            // For Theory: score >= threshold? But server already approved it. 
+                            // Let's assume if it's APPROVED, it's done? 
+                            // No, user requirement: "If fail, can submit again until pass".
+                            // So we need to check the Result field.
                             
-                            const canSubmit = (user?.id === selectedTraining.assigneeId) && (!latestLog || latestLog.status !== 'APPROVED');
-                            const canApprove = (user?.role === Role.MANAGER || user?.role === Role.ADMIN) && isSubmitted;
+                            let isPassed = false;
+                            // Check if status is APPROVED or if we are the submitter (optimistic) 
+                            // OR if we are viewing it as a list and it's not Graduation.
+                            // Actually, the backend now auto-approves.
+                            // If frontend sees SUBMITTED, it might be stale data or specific condition.
+                            // But for UI "Pending Approval" tag:
+                            
+                            if (latestLog?.status === 'APPROVED') {
+                                if (stageKey === 'THEORY') {
+                                    // Check score (no threshold anymore? user said "no score limit")
+                                    // If APPROVED, it is passed.
+                                    isPassed = true;
+                                } else {
+                                    // Check result
+                                    if (latestLog.result === 'PASS') isPassed = true;
+                                }
+                            }
+
+                            // Graduation logic: Needs explicit Approval from Manager
+                            const isGraduation = stageKey === 'GRADUATION';
+                            const isPendingApproval = isGraduation && latestLog?.status === 'SUBMITTED';
+                            // For other stages, if it is SUBMITTED, it means backend didn't auto-approve?
+                            // Or it's old data. But we fixed old data.
+                            // Let's treat SUBMITTED as Pending only for Graduation.
+                            // For others, if SUBMITTED, it should be auto-approved?
+                            // Wait, if I am Manager and I see SUBMITTED for Practical, it means it's pending.
+                            // But user said "No approval needed".
+                            // So even if it says SUBMITTED in DB (which shouldn't happen for new ones),
+                            // we should probably treat it as passed or just hide the "Pending" tag?
+                            // But better rely on DB status.
+                            
+                            const isGraduated = isGraduation && latestLog?.status === 'APPROVED';
+
+                            // Can Submit Logic:
+                            // 1. If NOT passed yet, can submit.
+                            // 2. If Passed, cannot submit anymore (close project).
+                            // 3. For Graduation: If Submitted (Pending), cannot submit again until rejected? Or just wait.
+                            
+                            let canSubmit = false;
+                            if (user?.id === selectedTraining.assigneeId) {
+                                if (!isPassed && !isGraduated && !isPendingApproval) {
+                                    canSubmit = true;
+                                }
+                            }
+                            
+                            // Can Approve Logic (Manager Only, for Graduation)
+                            const canApprove = (user?.role === Role.MANAGER || user?.role === Role.ADMIN) && isPendingApproval;
 
                             return {
                                 key: stageKey,
                                 label: (
                                     <span>
                                         {(STAGES as any)[stageKey]} 
-                                        {isApproved && <CheckCircleOutlined style={{ color: '#52c41a', marginLeft: 4 }} />}
-                                        {isSubmitted && <ClockCircleOutlined style={{ color: '#faad14', marginLeft: 4 }} />}
+                                        {isPassed && <CheckCircleOutlined style={{ color: '#52c41a', marginLeft: 4 }} />}
+                                        {isGraduated && <RocketOutlined style={{ color: '#1890ff', marginLeft: 4 }} />}
+                                        {isPendingApproval && <ClockCircleOutlined style={{ color: '#faad14', marginLeft: 4 }} />}
                                     </span>
                                 ),
                                 children: (
                                     <div style={{ padding: 16 }}>
-                                        {logs.map((log: any) => (
+                                        {sortedLogs.map((log: any) => (
                                             <Card 
                                                 key={log.id} 
                                                 size="small" 
                                                 style={{ marginBottom: 8, borderColor: log.status === 'APPROVED' ? '#b7eb8f' : undefined }}
                                                 title={dayjs(log.submittedAt).format('YYYY-MM-DD HH:mm')}
-                                                extra={<Tag color={log.status === 'APPROVED' ? 'green' : 'orange'}>{log.status === 'APPROVED' ? '已审批' : '待审批'}</Tag>}
+                                                extra={<Tag color={log.status === 'APPROVED' ? 'green' : 'orange'}>{log.status === 'APPROVED' ? '已确认' : (isGraduation ? '待审批' : '已提交')}</Tag>}
                                             >
                                                 {log.score !== null && <p>分数: <strong>{log.score}</strong></p>}
                                                 {log.result && <p>结果: <strong>{log.result === 'PASS' ? '通过' : log.result === 'FAIL' ? '未通过' : log.result}</strong></p>}
                                                 
-                                                {/* Render content based on stage type */}
+                                                {/* Render content */}
                                                 {log.content && (
-                                                    <div style={{ whiteSpace: 'pre-wrap', background: '#fafafa', padding: 8, borderRadius: 4, marginTop: 8 }}>
+                                                    <div
+                                                        style={{
+                                                            whiteSpace: 'pre-wrap',
+                                                            background: stageKey === 'PRACTICAL' ? '#1f1f1f' : '#e6f7ff',
+                                                            color: stageKey === 'PRACTICAL' ? '#f0f5ff' : undefined,
+                                                            padding: 8,
+                                                            borderRadius: 4,
+                                                            marginTop: 8,
+                                                            border: stageKey === 'PRACTICAL' ? '1px solid #434343' : '1px solid #91d5ff'
+                                                        }}
+                                                    >
                                                         {stageKey === 'PRACTICAL' ? (() => {
                                                             try {
                                                                 const contentObj = JSON.parse(log.content);
                                                                 return (
                                                                     <div style={{ fontSize: 12 }}>
-                                                                        <p><strong>科目:</strong> {contentObj.baseInfo?.subject} | <strong>时段:</strong> {contentObj.baseInfo?.session}</p>
-                                                                        <p><strong>场地:</strong> {contentObj.baseInfo?.site}</p>
-                                                                        <Divider style={{ margin: '4px 0' }} />
-                                                                        <p><strong>检查概况:</strong></p>
-                                                                        <ul style={{ paddingLeft: 16, margin: 0 }}>
-                                                                           <li>机身/桨/电: {contentObj.preCheck?.structure === 'NORMAL' ? '正常' : '异常'} / {contentObj.preCheck?.propeller === 'NORMAL' ? '正常' : '异常'} / {contentObj.preCheck?.battery === 'NORMAL' ? '正常' : '异常'}</li>
-                                                                           <li>天气/空域: {contentObj.envCheck?.weather === 'COMPLIANT' ? '符合' : '不符合'} / {contentObj.envCheck?.airspace === 'COMPLIANT' ? '符合' : '不符合'}</li>
-                                                                        </ul>
+                                                                        <p><strong>飞行时间:</strong> {contentObj.flightTime === 'AM' ? '上午' : '下午'}</p>
+                                                                        <p><strong>自旋:</strong> {contentObj.hover === 'PASS' ? '通过' : '不通过'}</p>
+                                                                        <p><strong>八字飞行:</strong> {contentObj.figure8 === 'PASS' ? '通过' : '不通过'}</p>
                                                                     </div>
                                                                 );
-                                                            } catch (e) {
-                                                                return log.content;
-                                                            }
+                                                            } catch (e) { return log.content; }
+                                                        })() : stageKey === 'GROUND' ? (() => {
+                                                            try {
+                                                                const contentObj = JSON.parse(log.content);
+                                                                return (
+                                                                    <div style={{ fontSize: 12 }}>
+                                                                        <p><strong>地面站:</strong> {contentObj.groundStation === 'PASS' ? '通过' : '不通过'}</p>
+                                                                        <p><strong>预规划:</strong> {contentObj.prePlanning === 'PASS' ? '通过' : '不通过'}</p>
+                                                                        <p><strong>重规划:</strong> {contentObj.rePlanning === 'PASS' ? '通过' : '不通过'}</p>
+                                                                    </div>
+                                                                );
+                                                            } catch (e) { return log.content; }
                                                         })() : log.content}
                                                     </div>
                                                 )}
                                                 
                                                 {log.status === 'APPROVED' && log.approvedAt && (
                                                     <div style={{ marginTop: 8, fontSize: 12, color: '#999' }}>
-                                                        审批人ID: {log.approvedBy} 于 {dayjs(log.approvedAt).format('YYYY-MM-DD HH:mm')}
+                                                        确认时间: {dayjs(log.approvedAt).format('YYYY-MM-DD HH:mm')}
                                                     </div>
                                                 )}
 
-                                                {log.status === 'SUBMITTED' && canApprove && (
+                                                {/* Approve Button for Graduation */}
+                                                {isGraduation && log.status === 'SUBMITTED' && (
                                                      <div style={{ marginTop: 8, borderTop: '1px solid #eee', paddingTop: 8, textAlign: 'right' }}>
-                                                         <Popconfirm title="确定审批通过吗？" onConfirm={() => handleApprove(log.id)}>
-                                                             <Button type="primary" size="small">审批通过</Button>
-                                                         </Popconfirm>
+                                                         {(user?.role === Role.MANAGER || user?.role === Role.ADMIN) ? (
+                                                             <Popconfirm title="确定批准结业吗？批准后将生成档案。" onConfirm={() => handleApprove(log.id)}>
+                                                                 <Button type="primary" size="small">批准结业</Button>
+                                                             </Popconfirm>
+                                                         ) : (
+                                                             <span style={{ color: '#faad14', fontSize: 12 }}>等待部门负责人审批</span>
+                                                         )}
                                                      </div>
                                                 )}
                                             </Card>
@@ -543,6 +674,16 @@ const TrainingPage = () => {
                                                 </Button>
                                             </div>
                                         )}
+                                        {!canSubmit && isPassed && !isGraduation && (
+                                            <div style={{ marginTop: 24, textAlign: 'center', color: '#52c41a' }}>
+                                                <CheckCircleOutlined /> 此项目已通过完成
+                                            </div>
+                                        )}
+                                        {!canSubmit && isGraduated && (
+                                            <div style={{ marginTop: 24, textAlign: 'center', color: '#1890ff' }}>
+                                                <RocketOutlined /> 已结业
+                                            </div>
+                                        )}
                                     </div>
                                 )
                             };
@@ -550,6 +691,8 @@ const TrainingPage = () => {
                     />
                 )}
             </Modal>
+
+            {/* Log Input Modal */}
         </div>
     );
 };

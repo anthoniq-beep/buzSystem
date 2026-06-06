@@ -87,6 +87,7 @@ apiRouter.use('/', commonRoutes);
 
 // Mount all routes under /api
 app.use('/api', apiRouter);
+app.use('/', apiRouter);
 
 // Handle 404 for API routes
 app.use((req, res) => {

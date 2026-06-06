@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Card, Tree, Button, Table, Space, Tag, Modal, Form, Input, Select, App, Popconfirm } from 'antd';
+import { Card, Tree, Button, Table, Space, Tag, Modal, Form, Input, Select, App, Popconfirm, Switch } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, UserAddOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
 import { Role } from '../../types';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 const OrganizationPage = () => {
   const { message } = App.useApp();
+  const { user } = useAuth();
   const [departments, setDepartments] = useState<any[]>([]);
   const [rawDepartments, setRawDepartments] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -13,8 +15,10 @@ const OrganizationPage = () => {
   const [loading, setLoading] = useState(false);
   const [selectedDept, setSelectedDept] = useState<any>(null);
   
+  const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
+  const [deptForm] = Form.useForm();
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -78,6 +82,30 @@ const OrganizationPage = () => {
       return ids;
   };
 
+  const handleOpenDeptModal = () => {
+    deptForm.resetFields();
+    deptForm.setFieldsValue({
+      parentId: selectedDept?.id ?? null,
+    });
+    setIsDeptModalOpen(true);
+  };
+
+  const handleSaveDept = async (values: any) => {
+    try {
+      await api.post('/organization', {
+        name: values.name,
+        parentId: values.parentId ?? null,
+      });
+      message.success('部门添加成功');
+      setIsDeptModalOpen(false);
+      deptForm.resetFields();
+      fetchData();
+    } catch (error: any) {
+      const msg = error.response?.data?.message || '添加失败';
+      message.error(msg);
+    }
+  };
+
   const handleSaveUser = async (values: any) => {
     try {
       if (editingUser) {
@@ -115,8 +143,9 @@ const OrganizationPage = () => {
       await api.delete(`/users/${id}`);
       message.success('删除成功');
       fetchData();
-    } catch (error) {
-      message.error('删除失败');
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || '删除失败';
+      message.error(msg);
     }
   };
 
@@ -125,6 +154,25 @@ const OrganizationPage = () => {
     { title: '职位', dataIndex: 'role', key: 'role', render: (role: string) => <Tag color="blue">{role}</Tag> },
     { title: '电话/账号', dataIndex: 'phone', key: 'phone' },
     { title: '状态', dataIndex: 'status', key: 'status' },
+    ...(user?.role === Role.ADMIN ? [{
+      title: '发送权限',
+      dataIndex: 'canSendMail',
+      key: 'canSendMail',
+      render: (v: boolean, record: any) => (
+        <Switch
+          checked={!!v}
+          onChange={async (checked) => {
+            try {
+              await api.put(`/users/${record.id}/mail-permission`, { canSendMail: checked });
+              message.success('已更新发送权限');
+              fetchData();
+            } catch (error: any) {
+              message.error(error.response?.data?.message || '更新失败');
+            }
+          }}
+        />
+      )
+    }] : []),
     { title: '部门', dataIndex: 'departmentId', key: 'dept', render: (id: number) => rawDepartments.find(d => d.id === id)?.name || '-' },
     { title: '直属领导', dataIndex: 'supervisorId', key: 'supervisor', render: (id: number) => allUsers.find(u => u.id === id)?.name || '-' },
     {
@@ -144,7 +192,7 @@ const OrganizationPage = () => {
   return (
     <div style={{ display: 'flex', gap: 24, height: '100%' }}>
       {/* Left: Department Tree */}
-      <Card title="组织架构" variant="borderless" style={{ width: 300, height: '100%', overflowY: 'auto' }} extra={<Button type="link" icon={<PlusOutlined />} />}>
+      <Card title="组织架构" variant="borderless" style={{ width: 300, height: '100%', overflowY: 'auto' }} extra={<Button type="link" icon={<PlusOutlined />} onClick={handleOpenDeptModal} />}>
         <Tree
           treeData={departments}
           onSelect={handleDeptSelect}
@@ -171,6 +219,29 @@ const OrganizationPage = () => {
       >
         <Table dataSource={users} columns={columns} rowKey="id" loading={loading} />
       </Card>
+
+      <Modal 
+        title="新增部门" 
+        open={isDeptModalOpen} 
+        onCancel={() => {
+          setIsDeptModalOpen(false);
+          deptForm.resetFields();
+        }}
+        onOk={() => deptForm.submit()}
+      >
+        <Form form={deptForm} layout="vertical" onFinish={handleSaveDept}>
+          <Form.Item name="name" label="部门名称" rules={[{ required: true, message: '请输入部门名称' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="parentId" label="上级部门">
+            <Select allowClear placeholder="顶级部门">
+              {rawDepartments.map(dept => (
+                <Select.Option key={dept.id} value={dept.id}>{dept.name}</Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal 
         title={editingUser ? "编辑员工" : "添加员工"} 

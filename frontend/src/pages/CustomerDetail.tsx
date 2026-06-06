@@ -91,8 +91,8 @@ const CustomerDetail = () => {
             </div>
             <div style={{ marginBottom: 8 }}>{log.note}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Avatar size="small" style={{ backgroundColor: '#87d068' }}>{log.actor.name[0]}</Avatar>
-                <Text type="secondary" style={{ fontSize: 12 }}>{log.actor.name} - {log.actor.role}</Text>
+                <Avatar size="small" style={{ backgroundColor: '#87d068' }}>{log.actor?.name?.[0] || '?'}</Avatar>
+                <Text type="secondary" style={{ fontSize: 12 }}>{log.actor?.name || '未知用户'} - {log.actor?.role || '-'}</Text>
             </div>
         </Card>
     )

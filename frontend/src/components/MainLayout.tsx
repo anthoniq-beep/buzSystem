@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Layout, Menu, Avatar, Dropdown, Space, Typography, theme, Modal, Form, Input, App } from 'antd';
+import { Badge, Layout, List, Menu, Avatar, Dropdown, Space, Typography, theme, Modal, Form, Input, App, Switch, Button } from 'antd';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   UserOutlined,
@@ -17,10 +17,15 @@ import {
   MenuUnfoldOutlined,
   FileTextOutlined,
   RocketOutlined,
+  SunOutlined,
+  MoonOutlined,
+  MailOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { Role } from '../types';
 import api from '../services/api';
+import type { Announcement, InternalMail } from '../types';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -31,9 +36,17 @@ const MainLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { isDarkMode, toggleTheme } = useTheme();
   const { message } = App.useApp();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [passwordForm] = Form.useForm();
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadMails, setUnreadMails] = useState<InternalMail[]>([]);
+  const [isMailModalOpen, setIsMailModalOpen] = useState(false);
+  const [mailModalShown, setMailModalShown] = useState(false);
+  const [announcement, setAnnouncement] = useState<Announcement | null>(null);
+  const [isAnnouncementOpen, setIsAnnouncementOpen] = useState(false);
+  const [announcementShown, setAnnouncementShown] = useState(false);
 
   useEffect(() => {
     // Redirect Training Dept users from dashboard/root to training page
@@ -41,6 +54,69 @@ const MainLayout = () => {
         navigate('/training');
     }
   }, [user, location.pathname, navigate]);
+
+  const fetchMailReminder = async (forceShow: boolean) => {
+    if (!user) return;
+    try {
+      const [countRes, listRes] = await Promise.all([
+        api.get('/mails/unread-count'),
+        api.get('/mails/unread', { params: { limit: 5 } }),
+      ]);
+      const count = countRes.data?.count ?? 0;
+      setUnreadCount(count);
+      const list = listRes.data || [];
+      setUnreadMails(list);
+      if ((forceShow || !mailModalShown) && count > 0) {
+        setIsMailModalOpen(true);
+        setMailModalShown(true);
+      }
+    } catch {
+      setUnreadCount(0);
+      setUnreadMails([]);
+    }
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    setMailModalShown(false);
+    fetchMailReminder(true);
+  }, [user?.id]);
+
+  const fetchAnnouncement = async (forceShow: boolean) => {
+    if (!user) return;
+    try {
+      const res = await api.get('/announcements/latest');
+      const a = res.data as Announcement | null;
+      setAnnouncement(a);
+      if (!a) return;
+      if ((forceShow || !announcementShown) && !a.seen) {
+        setIsAnnouncementOpen(true);
+        setAnnouncementShown(true);
+      }
+    } catch {
+      setAnnouncement(null);
+    }
+  };
+
+  const markAnnouncementSeen = async () => {
+    if (!announcement?.id) return;
+    try {
+      await api.post(`/announcements/${announcement.id}/seen`);
+      setAnnouncement(prev => (prev ? { ...prev, seen: true } : prev));
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    setAnnouncementShown(false);
+    fetchAnnouncement(true);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchMailReminder(false);
+    fetchAnnouncement(false);
+  }, [location.pathname]);
 
   const handleLogout = () => {
     logout();
@@ -90,6 +166,16 @@ const MainLayout = () => {
       label: '教培管理',
     },
     {
+      key: '/mail',
+      icon: <MailOutlined />,
+      label: (
+        <Space>
+          <span>内部邮件</span>
+          <Badge count={unreadCount} size="small" />
+        </Space>
+      ),
+    },
+    {
       key: '/admin/settings',
       icon: <SettingOutlined />,
       label: '系统设置',
@@ -99,6 +185,16 @@ const MainLayout = () => {
       key: '/dashboard',
       icon: <DashboardOutlined />,
       label: '仪表盘',
+    },
+    {
+      key: '/mail',
+      icon: <MailOutlined />,
+      label: (
+        <Space>
+          <span>内部邮件</span>
+          <Badge count={unreadCount} size="small" />
+        </Space>
+      ),
     },
     {
       key: '/customers',
@@ -157,10 +253,19 @@ const MainLayout = () => {
     <Layout style={{ minHeight: '100vh' }}>
       <Sider trigger={null} collapsible collapsed={collapsed}>
         <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-            <img src="/logo.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img
+              src="/logo.png"
+              alt="Logo"
+              style={{
+                height: collapsed ? 28 : 34,
+                width: 'auto',
+                maxWidth: '80%',
+                objectFit: 'contain',
+              }}
+            />
         </div>
         <Menu
-          theme="dark"
+          theme={isDarkMode ? 'dark' : 'light'}
           mode="inline"
           selectedKeys={[location.pathname]}
           items={menuItems}
@@ -174,6 +279,12 @@ const MainLayout = () => {
             <Typography.Title level={4} style={{ margin: 0 }}>BuzSystem</Typography.Title>
           </Space>
           <Space>
+            <Switch
+              checkedChildren={<MoonOutlined />}
+              unCheckedChildren={<SunOutlined />}
+              checked={isDarkMode}
+              onChange={toggleTheme}
+            />
             <Text>{user?.name || user?.username}</Text>
             <Dropdown menu={userMenu} placement="bottomRight">
               <Avatar icon={<UserOutlined />} style={{ cursor: 'pointer' }} />
@@ -193,6 +304,71 @@ const MainLayout = () => {
           <Outlet />
         </Content>
       </Layout>
+
+      <Modal
+        title={`你有 ${unreadCount} 封未读邮件`}
+        open={isMailModalOpen}
+        onCancel={() => setIsMailModalOpen(false)}
+        footer={[
+          <Button key="later" onClick={() => setIsMailModalOpen(false)}>
+            稍后
+          </Button>,
+          <Button
+            key="view"
+            type="primary"
+            onClick={() => {
+              setIsMailModalOpen(false);
+              navigate('/mail');
+            }}
+          >
+            去查看
+          </Button>,
+        ]}
+        width={640}
+      >
+        <List
+          dataSource={unreadMails}
+          renderItem={(item) => (
+            <List.Item>
+              <Space direction="vertical" size={0}>
+                <Text strong>{item.title}</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  来自：{item.sender?.name || item.sender?.username || `#${item.senderId}`} · {new Date(item.createdAt).toLocaleString()}
+                </Text>
+              </Space>
+            </List.Item>
+          )}
+        />
+      </Modal>
+
+      <Modal
+        title={announcement?.title || '通告'}
+        open={isAnnouncementOpen}
+        onCancel={() => setIsAnnouncementOpen(false)}
+        footer={[
+          <Button
+            key="ok"
+            type="primary"
+            onClick={async () => {
+              await markAnnouncementSeen();
+              setIsAnnouncementOpen(false);
+            }}
+          >
+            我知道了
+          </Button>,
+        ]}
+        width={760}
+      >
+        {announcement?.mediaUrl ? (
+          <div style={{ width: '100%' }}>
+            <img
+              src={announcement.mediaUrl}
+              alt={announcement.title}
+              style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 12 }}
+            />
+          </div>
+        ) : null}
+      </Modal>
 
       <Modal
         title="修改密码"

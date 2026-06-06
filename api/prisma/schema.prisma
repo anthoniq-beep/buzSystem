@@ -93,6 +93,7 @@ model User {
   role         Role           @default(EMPLOYEE)
   phone        String?
   status       EmployeeStatus @default(PROBATION)
+  canSendMail  Boolean        @default(false)
   
   // 部门关联
   departmentId Int?
@@ -109,11 +110,58 @@ model User {
   salesTargets SalesTarget[]  // 销售目标
   commissions  Commission[]   // 佣金记录
   trainings    Training[]     // 负责的培训记录
+  mailsSent    InternalMail[] @relation("MailSender")
+  mailsReceived InternalMail[] @relation("MailRecipient")
+  announcementViews AnnouncementView[]
   
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
   @@map("users")
+}
+
+model InternalMail {
+  id          Int       @id @default(autoincrement())
+  title       String
+  content     String
+
+  senderId    Int
+  sender      User      @relation("MailSender", fields: [senderId], references: [id])
+
+  recipientId Int
+  recipient   User      @relation("MailRecipient", fields: [recipientId], references: [id])
+
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([recipientId, readAt])
+  @@index([senderId, createdAt])
+  @@map("internal_mails")
+}
+
+model Announcement {
+  id        Int      @id @default(autoincrement())
+  title     String
+  mediaUrl  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  views     AnnouncementView[]
+
+  @@map("announcements")
+}
+
+model AnnouncementView {
+  id             Int          @id @default(autoincrement())
+  announcementId Int
+  announcement   Announcement @relation(fields: [announcementId], references: [id])
+  userId         Int
+  user           User         @relation(fields: [userId], references: [id])
+  seenAt         DateTime     @default(now())
+
+  @@unique([announcementId, userId])
+  @@index([userId, seenAt])
+  @@map("announcement_views")
 }
 
 // 部门

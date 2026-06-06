@@ -1,4 +1,6 @@
 import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
+
 const prisma = new PrismaClient();
 
 async function main() {
@@ -6,8 +8,10 @@ async function main() {
     { name: '总经办', code: 'CEO' },
     { name: '市场营销部', code: 'MKT' },
     { name: '网络运营部', code: 'OPS' },
+    { name: '渠道销售部', code: 'CHN' },
     { name: '人力资源部', code: 'HR' },
-    { name: '财务部', code: 'FIN' }
+    { name: '财务部', code: 'FIN' },
+    { name: '教培部', code: 'EDU' }
   ];
 
   console.log('Start seeding departments...');
@@ -27,58 +31,26 @@ async function main() {
     }
   }
 
-  // Clean up wrong departments
-  // Default target for migration: '市场营销部'
-  const mktDept = await prisma.department.findFirst({ where: { name: '市场营销部' } });
-  
-  if (mktDept) {
-      const standardNames = departments.map(d => d.name);
-      
-      // Find departments that are NOT in our standard list
-      const wrongDepts = await prisma.department.findMany({
-          where: {
-              name: { notIn: standardNames }
-          }
-      });
-      
-      for (const wrongDept of wrongDepts) {
-          console.log(`Found non-standard department: ${wrongDept.name} (ID: ${wrongDept.id})`);
-          
-          // Migrate users to Marketing Department
-          const updateResult = await prisma.user.updateMany({
-              where: { departmentId: wrongDept.id },
-              data: { departmentId: mktDept.id }
-          });
-          console.log(`Migrated ${updateResult.count} users to 市场营销部`);
-          
-          // Delete wrong dept
-          try {
-              // Check for sub-departments first?
-              // If recursive delete is not enabled in schema, we might fail.
-              // But let's try.
-              await prisma.department.delete({ where: { id: wrongDept.id } });
-              console.log(`Deleted department: ${wrongDept.name}`);
-          } catch (e) {
-              console.error(`Could not delete ${wrongDept.name}:`, e);
-          }
-      }
-  }
-  
   console.log('Start seeding users...');
 
   // Create Admin User
   const adminExists = await prisma.user.findUnique({ where: { username: 'admin' } });
   if (!adminExists) {
+      const hashedPassword = await bcrypt.hash('admin123', 10);
+      const adminDept = await prisma.department.findFirst({ where: { name: '总经办' } });
+      
       await prisma.user.create({
           data: {
               username: 'admin',
-              password: 'admin', // Plain text for simplicity, in production use bcrypt
+              password: hashedPassword,
               name: '系统管理员',
               role: 'ADMIN',
-              departmentId: (await prisma.department.findFirst({ where: { name: '总经办' } }))?.id
+              phone: '13800000000',
+              departmentId: adminDept ? adminDept.id : null,
+              status: 'REGULAR'
           }
       });
-      console.log('Created user: admin/admin');
+      console.log('Created user: admin');
   } else {
       console.log('User admin exists');
   }
